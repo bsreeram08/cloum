@@ -26,7 +26,7 @@ Example:
 # Update version in both files
 git add -A
 git commit -m "Description of changes"
-git tag v1.1.0
+git tag v1.1.1
 git push origin master --tags
 ```
 
