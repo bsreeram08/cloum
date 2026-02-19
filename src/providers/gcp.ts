@@ -5,37 +5,55 @@ import type {
 } from "../config/types.ts";
 import { runCommand, runCommandSilent } from "../utils/shell.ts";
 import { green, yellow, blue, red, cyan, gray } from "../utils/colors.ts";
+import { parseGcpError, printError } from "../utils/errors.ts";
 
-/** Switch active gcloud account if needed, triggering login if token is missing */
-async function ensureAccount(account: string): Promise<void> {
-  const current = await runCommandSilent("gcloud", [
-    "config",
-    "get-value",
-    "account",
+/** Validate gcloud authentication before any operations, triggering login if needed */
+async function ensureAuthenticated(account?: string): Promise<void> {
+  // First, check if we can get a valid token with current credentials
+  const token = await runCommandSilent("gcloud", [
+    "auth",
+    "print-access-token",
   ]);
-  if (current.stdout.trim() !== account) {
-    console.log(yellow(`  🔐 Switching gcloud account → ${account}`));
-    const set = await runCommandSilent("gcloud", [
+  
+  if (token.exitCode !== 0) {
+    // Token is invalid/expired, need to login
+    console.log(yellow(`  🔐 Authentication expired — launching gcloud auth login...`));
+    const loginArgs = account ? ["auth", "login", "--account", account] : ["auth", "login"];
+    await runCommand("gcloud", loginArgs);
+    return;
+  }
+  
+  // Token is valid, but if a specific account is requested, ensure we're using it
+  if (account) {
+    const current = await runCommandSilent("gcloud", [
       "config",
-      "set",
+      "get-value",
       "account",
-      account,
     ]);
-    if (set.exitCode !== 0) {
-      throw new Error(`Failed to switch gcloud account: ${set.stderr}`);
-    }
-    // Check if the token is still valid; if not, trigger interactive login
-    const token = await runCommandSilent("gcloud", [
-      "auth",
-      "print-access-token",
-    ]);
-    if (token.exitCode !== 0) {
-      console.log(
-        yellow(
-          `  🔐 Token expired — launching gcloud auth login for ${account}...`,
-        ),
-      );
-      await runCommand("gcloud", ["auth", "login", "--account", account]);
+    if (current.stdout.trim() !== account) {
+      console.log(yellow(`  🔐 Switching gcloud account → ${account}`));
+      const set = await runCommandSilent("gcloud", [
+        "config",
+        "set",
+        "account",
+        account,
+      ]);
+      if (set.exitCode !== 0) {
+        throw new Error(`Failed to switch gcloud account: ${set.stderr}`);
+      }
+      // After switching accounts, verify the new token is valid
+      const newToken = await runCommandSilent("gcloud", [
+        "auth",
+        "print-access-token",
+      ]);
+      if (newToken.exitCode !== 0) {
+        console.log(
+          yellow(
+            `  🔐 Token expired for ${account} — launching gcloud auth login...`,
+          ),
+        );
+        await runCommand("gcloud", ["auth", "login", "--account", account]);
+      }
     }
   }
 }
@@ -48,9 +66,8 @@ export async function connectGcp(cluster: GcpCluster): Promise<void> {
   console.log(blue(`  Target region:   ${cluster.region}`));
   console.log("");
 
-  if (cluster.account) {
-    await ensureAccount(cluster.account);
-  }
+  // Ensure we have valid authentication before any operations
+  await ensureAuthenticated(cluster.account);
 
   console.log(yellow(`  🏗️  Setting GCP project...`));
   const projSet = await runCommandSilent("gcloud", [
@@ -60,7 +77,9 @@ export async function connectGcp(cluster: GcpCluster): Promise<void> {
     cluster.project,
   ]);
   if (projSet.exitCode !== 0) {
-    throw new Error(`Failed to set project: ${projSet.stderr}`);
+    const err = parseGcpError(projSet.stderr);
+    printError(err);
+    throw new Error(`Failed to set project: ${err.message}`);
   }
 
   console.log(yellow(`  ⚙️  Fetching kubeconfig credentials...`));
@@ -75,6 +94,8 @@ export async function connectGcp(cluster: GcpCluster): Promise<void> {
     cluster.project,
   ]);
   if (creds.exitCode !== 0) {
+    // Note: creds.stderr is empty because runCommand uses inherit for stdout/stderr
+    // We can't parse the error here, but this is a terminal operation anyway
     throw new Error(`gcloud get-credentials failed (exit ${creds.exitCode})`);
   }
 

@@ -5,6 +5,7 @@ import type {
 } from "../config/types.ts";
 import { runCommand, runCommandSilent } from "../utils/shell.ts";
 import { green, yellow, blue, red, cyan, gray } from "../utils/colors.ts";
+import { parseAzureError, printError } from "../utils/errors.ts";
 
 /** Optionally set the active Azure subscription before connecting */
 async function ensureSubscription(subscription: string): Promise<void> {
@@ -87,6 +88,7 @@ export async function connectAzure(cluster: AzureCluster): Promise<void> {
     "--overwrite-existing",
   ]);
   if (result.exitCode !== 0) {
+    // Note: result.stderr is empty because runCommand uses inherit
     throw new Error(`az aks get-credentials failed (exit ${result.exitCode})`);
   }
 

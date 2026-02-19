@@ -9,6 +9,7 @@ import {
   runCommandWithEnv,
 } from "../utils/shell.ts";
 import { green, yellow, blue, cyan, gray } from "../utils/colors.ts";
+import { parseAwsError, printError } from "../utils/errors.ts";
 
 /** Build the env overrides needed to activate an AWS profile */
 function profileEnv(profile?: string): Record<string, string> {
@@ -62,9 +63,9 @@ export async function connectAws(cluster: AwsCluster): Promise<void> {
   console.log(yellow(`  ⚙️  Updating kubeconfig for EKS cluster...`));
   const result = await runCommandWithEnv("aws", args, env);
   if (result.exitCode !== 0) {
-    throw new Error(
-      `aws eks update-kubeconfig failed (exit ${result.exitCode})`,
-    );
+    const err = parseAwsError(result.stderr);
+    printError(err);
+    throw new Error(`aws eks update-kubeconfig failed: ${err.message}`);
   }
 
   // Verify auth alignment
