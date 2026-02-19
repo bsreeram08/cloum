@@ -18,6 +18,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Bump version
         run: |
           # Get current version from version.ts
@@ -35,10 +40,19 @@ jobs:
           echo "New version: $NEW_VERSION"
           
           # Update version.ts
-          sed -i "s/VERSION = \"$CURRENT_VERSION\"/VERSION = \"$NEW_VERSION\"/" src/commands/version.ts
+          sed -i "s/VERSION = \".*\"/VERSION = \"$NEW_VERSION\"/" src/commands/version.ts
           
-          # Update package.json
-          sed -i "s/\"version\": \"$CURRENT_VERSION\"/\"version\": \"$NEW_VERSION\"/" package.json
+          # Update package.json using node
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.version = '$NEW_VERSION';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+          
+          # Show what changed
+          echo "version.ts: $(grep VERSION src/commands/version.ts)"
+          echo "package.json: $(grep '\"version\"' package.json)"
           
           # Commit and tag
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
