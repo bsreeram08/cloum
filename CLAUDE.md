@@ -20,7 +20,7 @@ This is a CLI tool for managing Kubernetes cluster connections across GCP, AWS, 
 5. Push: `git push origin master --tags`
 
 **Automatic Release (recommended):**
-1. Just push to master/main
+1. Just push to master
 2. The bump-version workflow automatically:
    - Increments patch version
    - Updates both version.ts and package.json
