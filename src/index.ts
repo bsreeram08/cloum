@@ -41,11 +41,11 @@ cloum add options:
   --name <name>             Cluster alias (required)
   --cluster-name <name>     Cloud cluster name (required)
   --region <region>         Cloud region (required)
-  --project <id>            GCP project ID (gcp only)
-  --account <email>         gcloud account to activate (gcp only)
+  --project <id>            GCP project ID (gcp only, required)
+  --account <email>         gcloud account to activate (gcp only, required)
   --profile <name>          AWS profile name (aws only)
   --role-arn <arn>          IAM role ARN to assume (aws only)
-  --resource-group <rg>     Azure resource group (azure only)
+  --resource-group <rg>     Azure resource group (azure only, required)
   --subscription <id>       Azure subscription (azure only)
 
 cloum discover options:

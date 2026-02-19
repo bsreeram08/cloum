@@ -13,7 +13,7 @@ export interface GcpCluster extends BaseCluster {
   readonly provider: "gcp";
   readonly project: string;
   readonly clusterName: string;
-  readonly account?: string; // gcloud account to activate before connecting
+  readonly account: string; // gcloud account to activate before connecting (required)
 }
 
 /** EKS cluster configuration */

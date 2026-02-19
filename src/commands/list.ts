@@ -12,9 +12,14 @@ function formatRow(cluster: ClusterConfig): string {
   const provider = PROVIDER_LABELS[cluster.provider] ?? cluster.provider;
   let detail = "";
   switch (cluster.provider) {
-    case "gcp":
-      detail = `project=${cluster.project}`;
+    case "gcp": {
+      const gcpCluster = cluster as { project: string; account?: string };
+      detail = `project=${gcpCluster.project}`;
+      if (gcpCluster.account) {
+        detail += `, account=${gcpCluster.account}`;
+      }
       break;
+    }
     case "aws":
       detail = cluster.profile
         ? `profile=${cluster.profile}`

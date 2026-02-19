@@ -38,7 +38,7 @@ function buildCluster(provider: Provider, opts: AddOptions): ClusterConfig {
         region: opts.region,
         clusterName: opts.clusterName,
         project: requireOption(opts.project, "project"),
-        ...(opts.account && { account: opts.account }),
+        account: requireOption(opts.account, "account"),
       };
       return cluster;
     }
