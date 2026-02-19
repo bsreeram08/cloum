@@ -2,27 +2,63 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
-  release:
-    strategy:
-      matrix:
-        include:
-          - os: macos-latest
-            artifact_name: cloum-macos-x64
-          - os: ubuntu-latest
-            artifact_name: cloum-linux-x64
-          - os: windows-latest
-            artifact_name: cloum-windows-x64.exe
-    runs-on: ${{ matrix.os }}
+  bump-version:
+    name: Bump Version
+    runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.bump.outputs.new_version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Bump version
+        id: bump
+        run: |
+          # Get current version from version.ts
+          CURRENT_VERSION=$(grep -oP 'VERSION = "\K[^"]+' src/commands/version.ts)
+          echo "Current version: $CURRENT_VERSION"
+          
+          # Bump patch version
+          IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
+          MAJOR=${VERSION_PARTS[0]}
+          MINOR=${VERSION_PARTS[1]}
+          PATCH=${VERSION_PARTS[2]}
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+          
+          echo "New version: $NEW_VERSION"
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          
+          # Update version.ts
+          sed -i "s/VERSION = \"$CURRENT_VERSION\"/VERSION = \"$NEW_VERSION\"/" src/commands/version.ts
+          
+          # Commit and tag
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add src/commands/version.ts
+          git commit -m "Bump version to $NEW_VERSION"
+          git tag "v$NEW_VERSION"
+          git push origin main --tags
+
+  release:
+    name: Build and Release
+    needs: bump-version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.bump-version.outputs.new_version }}
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -32,31 +68,23 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Build binary
-        run: bun build ./src/index.ts --compile --outfile ${{ matrix.artifact_name }}
+      - name: Build macOS binary
+        run: bun build ./src/index.ts --compile --outfile cloum-darwin-x64
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.artifact_name }}
+      - name: Build Linux binary
+        run: bun build ./src/index.ts --compile --outfile cloum-linux-x64 --target bun-linux-x64
 
-  create-release:
-    needs: release
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
+      - name: Build Windows binary
+        run: bun build ./src/index.ts --compile --outfile cloum-windows-x64.exe --target bun-windows-x64
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ needs.bump-version.outputs.new_version }}
           files: |
-            artifacts/cloum-macos-x64
-            artifacts/cloum-linux-x64
-            artifacts/cloum-windows-x64.exe
+            cloum-darwin-x64
+            cloum-linux-x64
+            cloum-windows-x64.exe
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

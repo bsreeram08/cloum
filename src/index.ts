@@ -9,12 +9,14 @@ import { cleanCommand } from "./commands/clean.ts";
 import { removeCommand } from "./commands/remove.ts";
 import { aiCommand } from "./commands/ai.ts";
 import { importCommand } from "./commands/import.ts";
+import { updateCommand } from "./commands/update.ts";
+import { VERSION } from "./commands/version.ts";
 import type { Provider } from "./config/types.ts";
 
 const VALID_PROVIDERS: Provider[] = ["gcp", "aws", "azure"];
 
 const HELP = `
-cloum — Cloud Manager CLI
+cloum — Cloud Manager CLI v${VERSION}
 
 Usage:
   cloum connect <name>                     Connect to a configured cluster
@@ -27,6 +29,8 @@ Usage:
   cloum registry <provider> [options]      Login to container registry
   cloum clean [gcp|aws|azure] [--all]       Clear cached sessions (provider or all)
   cloum ai [--open]                        Print AI setup prompt (--open launches Claude)
+  cloum update [--force]                   Check and install latest version
+  cloum --version                          Show version
   cloum help                               Show this help message
 
 Providers: gcp | aws | azure
@@ -228,6 +232,19 @@ async function main(): Promise<void> {
         const filePath = rest[0];
         if (!filePath) throw new Error("Usage: cloum import <file.json>");
         await importCommand(filePath);
+        break;
+      }
+
+      case "update": {
+        const flags = parseFlags(rest);
+        await updateCommand(flags["force"] === true);
+        break;
+      }
+
+      case "version":
+      case "--version":
+      case "-v": {
+        console.log(`cloum v${VERSION}`);
         break;
       }
 
