@@ -171,7 +171,7 @@ curl -sLo install.sh https://raw.githubusercontent.com/bsreeram08/cloum/master/i
 chmod +x install.sh
 
 # Run with specific version
-VERSION=v1.1.2 ./install.sh
+VERSION=v1.1.3 ./install.sh
 ```
 
 Or manually download from GitHub releases:
