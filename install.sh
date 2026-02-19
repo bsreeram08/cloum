@@ -84,7 +84,12 @@ install() {
 
     echo "Detected platform: ${os}-${arch}"
 
-    version=$(resolve_version)
+    # Use provided version or fetch latest
+    if [ -n "${VERSION:-}" ]; then
+        version="$VERSION"
+    else
+        version=$(resolve_version)
+    fi
     echo "Installing cloum ${version}..."
 
     # Binary names match the GitHub release artifacts (using bun-darwin/bun-linux/bun-windows format)
