@@ -86,7 +86,10 @@ install() {
 
     # Use provided version or fetch latest
     if [ -n "${VERSION:-}" ]; then
-        version="$VERSION"
+        version="${VERSION}"
+        if [[ ! "$version" =~ ^v ]]; then
+            version="v${version}"
+        fi
     else
         version=$(resolve_version)
     fi

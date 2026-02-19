@@ -154,18 +154,19 @@ cloum update --force     # Force reinstall latest version
 
 ### Install Specific Version
 
-To install a specific version, set the VERSION environment variable:
+To install a specific version, download the install script first, then run it with VERSION set:
 
 ```bash
-# Install specific version
-VERSION=v1.0.15 curl -sL https://raw.githubusercontent.com/bsreeram08/cloum/master/install.sh | bash
+# Download script first
+curl -sLo install.sh https://raw.githubusercontent.com/bsreeram08/cloum/master/install.sh
+chmod +x install.sh
 
-# Or export the variable
-export VERSION=v1.0.15
-curl -sL https://raw.githubusercontent.com/bsreeram08/cloum/master/install.sh | bash
+# Run with specific version
+VERSION=v1.0.18 ./install.sh
 ```
 
 Or manually download from GitHub releases:
+
 ```bash
 # Download from https://github.com/bsreeram08/cloum/releases
 ```
@@ -177,6 +178,7 @@ cloum uninstall          # Uninstall cloum CLI
 ```
 
 Or manually:
+
 ```bash
 rm -rf ~/.local/share/cloum
 rm -f ~/.local/bin/cloum

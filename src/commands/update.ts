@@ -178,24 +178,9 @@ export async function updateCommand(force: boolean = false): Promise<void> {
   }
 
   try {
-    console.log(`   Downloading: ${asset.name}`);
-    // Get the actual binary path - use which command as fallback
-    let binaryPath = Bun.argv[0];
-    
-    // If running as just "bun" or "./", we need to find the actual binary
-    if (!binaryPath || binaryPath === "bun" || binaryPath.includes("bun")) {
-      // Try to find it in PATH
-      const which = Bun.spawnSync(["which", "cloum"]);
-      if (which.stdout.toString().trim()) {
-        binaryPath = which.stdout.toString().trim();
-      } else {
-        // Fallback to default location
-        const home = process.env.HOME || process.env.USERPROFILE;
-        binaryPath = `${home}/.local/bin/cloum`;
-      }
-    }
-    
-    await downloadAndReplace(asset.browser_download_url, binaryPath);
+    console.log(yellow(`   Downloading: ${asset.name}`));
+    // Use the install script - it's more reliable
+    await runInstallScript();
     console.log(green(`\n✅ Updated to v${latestVersion}!`));
     console.log(`   Restart or run \`cloum --version\` to verify.`);
   } catch (error) {
