@@ -145,7 +145,24 @@ cloum clean azure        # Logout Azure + clear contexts
 cloum clean --all        # Revoke all providers + clear contexts
 ```
 
-### Container Registry Login
+### Update cloum
+
+```bash
+cloum update             # Check for and install latest version
+cloum update --force     # Force reinstall latest version
+```
+
+### Uninstall
+
+```bash
+cloum uninstall          # Uninstall cloum CLI
+```
+
+Or manually:
+```bash
+rm -rf ~/.local/share/cloum
+rm -f ~/.local/bin/cloum
+```
 
 ```bash
 cloum registry gcp --region us-central1 --project my-project

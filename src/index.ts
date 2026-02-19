@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { green, yellow, red, cyan } from "./utils/colors.ts";
 import { connectCommand } from "./commands/connect.ts";
 import { listCommand } from "./commands/list.ts";
 import { statusCommand } from "./commands/status.ts";
@@ -30,6 +31,7 @@ Usage:
   cloum clean [gcp|aws|azure] [--all]       Clear cached sessions (provider or all)
   cloum ai [--open]                        Print AI setup prompt (--open launches Claude)
   cloum update [--force]                   Check and install latest version
+  cloum uninstall                          Uninstall cloum CLI
   cloum --version                          Show version
   cloum help                               Show this help message
 
@@ -238,6 +240,31 @@ async function main(): Promise<void> {
       case "update": {
         const flags = parseFlags(rest);
         await updateCommand(flags["force"] === true);
+        break;
+      }
+
+      case "uninstall": {
+        const { REPO } = await import("./commands/version.ts");
+        console.log(yellow(`\n🗑️  Uninstalling cloum...`));
+        
+        const proc = Bun.spawn(
+          [
+            "bash",
+            "-c",
+            `curl -sL https://raw.githubusercontent.com/${REPO}/main/install.sh | bash -s -- uninstall`,
+          ],
+          {
+            stdout: "inherit",
+            stderr: "inherit",
+          },
+        );
+        await proc.exited;
+        
+        if (proc.exitCode === 0) {
+          console.log(green(`\n✅ Uninstall complete!`));
+        } else {
+          console.log(red(`\n❌ Uninstall failed with code ${proc.exitCode}`));
+        }
         break;
       }
 
