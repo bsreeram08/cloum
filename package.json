@@ -1,0 +1,44 @@
+{
+  "name": "cloum",
+  "version": "1.0.0",
+  "description": "A CLI tool for managing Kubernetes cluster connections across GCP, AWS, and Azure",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsreeram08/cloum.git"
+  },
+  "keywords": [
+    "kubernetes",
+    "k8s",
+    "gke",
+    "eks",
+    "aks",
+    "cloud",
+    "gcp",
+    "aws",
+    "azure",
+    "cli"
+  ],
+  "author": "Sreeram",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/bsreeram08/cloum/issues"
+  },
+  "homepage": "https://github.com/bsreeram08/cloum#readme",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "cloum": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "bun build ./src/index.ts --compile --outfile dist/cloum"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}

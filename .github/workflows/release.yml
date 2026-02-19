@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build binaries
+        run: |
+          bun build ./src/index.ts --compile --outfile cloum-macos-x64
+          bun build ./src/index.ts --compile --outfile cloum-macos-arm64
+          bun build ./src/index.ts --compile --outfile cloum-linux-x64 --target linux-x64
+          bun build ./src/index.ts --compile --outfile cloum-windows-x64.exe --target windows-x64
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            cloum-macos-x64
+            cloum-macos-arm64
+            cloum-linux-x64
+            cloum-windows-x64.exe
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
