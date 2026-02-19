@@ -61,7 +61,7 @@ cloum registry options:
   --registry <name>         ACR registry name (azure)
 
 Examples:
-  cloum add gcp --name prod-gke --cluster-name my-cluster --region us-central1 --project my-project
+  cloum add gcp --name prod-gke --cluster-name my-cluster --region us-central1 --project my-project --account user@example.com
   cloum add aws --name staging-eks --cluster-name staging --region us-east-1 --profile staging
   cloum add azure --name dev-aks --cluster-name dev --region eastus --resource-group dev-rg
   cloum connect prod-gke
@@ -71,6 +71,164 @@ Examples:
   cloum registry all --region us-east-1 --project my-proj --registry myacr
   cloum clean --all
   cloum clean gcp
+  cloum ai --open
+`;
+
+// Subcommand help messages
+const ADD_HELP = `
+cloum add — Add a cluster to configuration
+
+Usage:
+  cloum add <provider> [options]
+
+Providers: gcp | aws | azure
+
+Options:
+  --name <name>             Cluster alias (required)
+  --cluster-name <name>     Cloud cluster name (required)
+  --region <region>         Cloud region (required)
+  --project <id>            GCP project ID (gcp only, required)
+  --account <email>         gcloud account to activate (gcp only, required)
+  --profile <name>          AWS profile name (aws only)
+  --role-arn <arn>          IAM role ARN to assume (aws only)
+  --resource-group <rg>     Azure resource group (azure only, required)
+  --subscription <id>       Azure subscription (azure only)
+
+Examples:
+  cloum add gcp --name prod-gke --cluster-name my-cluster --region us-central1 --project my-project --account user@example.com
+  cloum add aws --name staging-eks --cluster-name staging --region us-east-1 --profile staging
+  cloum add azure --name dev-aks --cluster-name dev --region eastus --resource-group dev-rg
+`;
+
+const DISCOVER_HELP = `
+cloum discover — Discover clusters from cloud providers
+
+Usage:
+  cloum discover <provider> [options]
+
+Providers: gcp | aws | azure
+
+Options:
+  --project <id>            GCP project (gcp only)
+  --region <region>         AWS region (aws only)
+  --profile <name>          AWS profile (aws only)
+  --resource-group <rg>     Azure resource group (azure only)
+
+Examples:
+  cloum discover gcp --project my-project
+  cloum discover aws --region us-east-1
+  cloum discover azure --resource-group my-rg
+`;
+
+const REGISTRY_HELP = `
+cloum registry — Login to container registry
+
+Usage:
+  cloum registry <provider> [options]
+
+Providers: gcp | aws | azure | all
+
+Options:
+  --region <region>         Cloud region (gcp, aws)
+  --project <id>            GCP project (gcp)
+  --profile <name>          AWS profile (aws)
+  --registry <name>         ACR registry name (azure)
+
+Examples:
+  cloum registry gcp --region us-central1 --project my-project
+  cloum registry aws --region us-east-1 --profile prod
+  cloum registry azure --registry myregistry
+  cloum registry all --region us-east-1 --project my-proj --registry myacr
+`;
+
+const CLEAN_HELP = `
+cloum clean — Clear cached kubectl sessions and/or cloud credentials
+
+Usage:
+  cloum clean [provider] [options]
+
+Providers: gcp | aws | azure
+
+Options:
+  --all                      Revoke all cloud credentials and clear contexts
+
+Examples:
+  cloum clean                # Clear kubectl contexts only
+  cloum clean gcp            # Revoke GCP credentials + clear contexts
+  cloum clean aws            # Logout AWS SSO + clear contexts
+  cloum clean azure          # Logout Azure + clear contexts
+  cloum clean --all          # Revoke all providers + clear contexts
+`;
+
+const UPDATE_HELP = `
+cloum update — Check for and install latest version
+
+Usage:
+  cloum update [options]
+
+Options:
+  --force                    Force reinstall latest version
+
+Examples:
+  cloum update
+  cloum update --force
+`;
+
+const CONNECT_HELP = `
+cloum connect — Connect to a configured cluster
+
+Usage:
+  cloum connect <name>
+
+Examples:
+  cloum connect prod-gke
+`;
+
+const LIST_HELP = `
+cloum list — List all configured clusters
+
+Usage:
+  cloum list
+`;
+
+const STATUS_HELP = `
+cloum status — Show cloud provider auth status
+
+Usage:
+  cloum status
+`;
+
+const REMOVE_HELP = `
+cloum remove — Remove a cluster from config
+
+Usage:
+  cloum remove <name>
+
+Examples:
+  cloum remove prod-gke
+`;
+
+const IMPORT_HELP = `
+cloum import — Import multiple clusters from JSON file
+
+Usage:
+  cloum import <file.json>
+
+Examples:
+  cloum import clusters.json
+`;
+
+const AI_HELP = `
+cloum ai — Print AI setup prompt
+
+Usage:
+  cloum ai [options]
+
+Options:
+  --open                      Launch Claude in browser with prompt
+
+Examples:
+  cloum ai
   cloum ai --open
 `;
 
@@ -131,6 +289,11 @@ async function main(): Promise<void> {
       }
 
       case "connect": {
+        const flags = parseFlags(rest);
+        if (flags["help"] === true || flags["h"] === true) {
+          console.log(CONNECT_HELP);
+          return;
+        }
         const name = rest[0];
         if (!name) throw new Error("Usage: cloum connect <name>");
         await connectCommand(name);
@@ -138,86 +301,121 @@ async function main(): Promise<void> {
       }
 
       case "list": {
+        const flags = parseFlags(rest);
+        if (flags["help"] === true || flags["h"] === true) {
+          console.log(LIST_HELP);
+          return;
+        }
         await listCommand();
         break;
       }
 
       case "status": {
+        const flags = parseFlags(rest);
+        if (flags["help"] === true || flags["h"] === true) {
+          console.log(STATUS_HELP);
+          return;
+        }
         await statusCommand();
         break;
       }
 
       case "add": {
+        const flags = parseFlags(rest);
+        if (flags["help"] === true || flags["h"] === true) {
+          console.log(ADD_HELP);
+          return;
+        }
         const provider = parseProvider(rest[0]);
-        const flags = parseFlags(rest.slice(1));
+        const addFlags = parseFlags(rest.slice(1));
         await addCommand(provider, {
           name:
-            flagStr(flags, "name") ??
+            flagStr(addFlags, "name") ??
             (() => {
               throw new Error("--name is required");
             })(),
           region:
-            flagStr(flags, "region") ??
+            flagStr(addFlags, "region") ??
             (() => {
               throw new Error("--region is required");
             })(),
           clusterName:
-            flagStr(flags, "cluster-name") ??
+            flagStr(addFlags, "cluster-name") ??
             (() => {
               throw new Error("--cluster-name is required");
             })(),
-          project: flagStr(flags, "project"),
-          account: flagStr(flags, "account"),
-          profile: flagStr(flags, "profile"),
-          roleArn: flagStr(flags, "role-arn"),
-          resourceGroup: flagStr(flags, "resource-group"),
-          subscription: flagStr(flags, "subscription"),
+          project: flagStr(addFlags, "project"),
+          account: flagStr(addFlags, "account"),
+          profile: flagStr(addFlags, "profile"),
+          roleArn: flagStr(addFlags, "role-arn"),
+          resourceGroup: flagStr(addFlags, "resource-group"),
+          subscription: flagStr(addFlags, "subscription"),
         });
         break;
       }
 
       case "discover": {
+        const flags = parseFlags(rest);
+        if (flags["help"] === true || flags["h"] === true) {
+          console.log(DISCOVER_HELP);
+          return;
+        }
         const provider = parseProvider(rest[0]);
-        const flags = parseFlags(rest.slice(1));
+        const discoverFlags = parseFlags(rest.slice(1));
         await discoverCommand(provider, {
-          project: flagStr(flags, "project"),
-          region: flagStr(flags, "region"),
-          profile: flagStr(flags, "profile"),
-          resourceGroup: flagStr(flags, "resource-group"),
+          project: flagStr(discoverFlags, "project"),
+          region: flagStr(discoverFlags, "region"),
+          profile: flagStr(discoverFlags, "profile"),
+          resourceGroup: flagStr(discoverFlags, "resource-group"),
         });
         break;
       }
 
       case "registry": {
+        const flags = parseFlags(rest);
+        if (flags["help"] === true || flags["h"] === true) {
+          console.log(REGISTRY_HELP);
+          return;
+        }
         const rawProvider = rest[0];
-        const flags = parseFlags(rest.slice(1));
+        const registryFlags = parseFlags(rest.slice(1));
         // "all" is a special value — login to every provider at once
         const provider =
           rawProvider === "all" ? "all" : parseProvider(rawProvider);
         await registryCommand(provider, {
-          region: flagStr(flags, "region"),
-          project: flagStr(flags, "project"),
-          profile: flagStr(flags, "profile"),
-          registry: flagStr(flags, "registry"),
-          all: flags["all"] === true,
+          region: flagStr(registryFlags, "region"),
+          project: flagStr(registryFlags, "project"),
+          profile: flagStr(registryFlags, "profile"),
+          registry: flagStr(registryFlags, "registry"),
+          all: registryFlags["all"] === true,
         });
         break;
       }
 
       case "clean": {
+        const flags = parseFlags(rest);
+        if (flags["help"] === true || flags["h"] === true) {
+          console.log(CLEAN_HELP);
+          return;
+        }
         // Supports: clean | clean --all | clean gcp | clean aws | clean azure
         const rawProvider = rest[0];
-        const flags = parseFlags(rest);
+        const cleanFlags = parseFlags(rest);
         const isProvider =
           rawProvider && VALID_PROVIDERS.includes(rawProvider as Provider);
         await cleanCommand({
-          all: flags["all"] === true,
+          all: cleanFlags["all"] === true,
           provider: isProvider ? (rawProvider as Provider) : undefined,
         });
         break;
       }
 
       case "remove": {
+        const flags = parseFlags(rest);
+        if (flags["help"] === true || flags["h"] === true) {
+          console.log(REMOVE_HELP);
+          return;
+        }
         const name = rest[0];
         if (!name) throw new Error("Usage: cloum remove <name>");
         await removeCommand(name);
@@ -226,11 +424,20 @@ async function main(): Promise<void> {
 
       case "ai": {
         const flags = parseFlags(rest);
+        if (flags["help"] === true || flags["h"] === true) {
+          console.log(AI_HELP);
+          return;
+        }
         await aiCommand({ open: flags["open"] === true });
         break;
       }
 
       case "import": {
+        const flags = parseFlags(rest);
+        if (flags["help"] === true || flags["h"] === true) {
+          console.log(IMPORT_HELP);
+          return;
+        }
         const filePath = rest[0];
         if (!filePath) throw new Error("Usage: cloum import <file.json>");
         await importCommand(filePath);
@@ -239,6 +446,10 @@ async function main(): Promise<void> {
 
       case "update": {
         const flags = parseFlags(rest);
+        if (flags["help"] === true || flags["h"] === true) {
+          console.log(UPDATE_HELP);
+          return;
+        }
         await updateCommand(flags["force"] === true);
         break;
       }

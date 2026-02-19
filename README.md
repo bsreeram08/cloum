@@ -55,13 +55,22 @@ cloum clean                   # Clear cached kubectl sessions
 
 ```bash
 # GCP GKE
-cloum add gcp --name prod-gke --cluster-name my-cluster --region us-central1 --project my-project
+cloum add gcp --name prod-gke --cluster-name my-cluster --region us-central1 --project my-project --account user@example.com
 
 # AWS EKS
 cloum add aws --name staging-eks --cluster-name staging --region us-east-1 --profile staging
 
 # Azure AKS
 cloum add azure --name dev-aks --cluster-name dev --region eastus --resource-group dev-rg
+```
+
+### Get Help for a Command
+
+```bash
+cloum add --help        # Show add command options
+cloum discover --help   # Show discover command options
+cloum registry --help   # Show registry command options
+cloum clean --help     # Show clean command options
 ```
 
 ### Import Multiple Clusters

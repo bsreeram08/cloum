@@ -41,7 +41,7 @@ Ask the user for their cluster details. For each cluster they want to add, run t
 
 ```bash
 # GCP GKE
-cloum add gcp --name <alias> --cluster-name <cluster> --region <region> --project <project>
+cloum add gcp --name <alias> --cluster-name <cluster> --region <region> --project <project> --account <email>
 
 # AWS EKS
 cloum add aws --name <alias> --cluster-name <cluster> --region <region> --profile <profile>
@@ -49,6 +49,8 @@ cloum add aws --name <alias> --cluster-name <cluster> --region <region> --profil
 # Azure AKS
 cloum add azure --name <alias> --cluster-name <cluster> --region <region> --resource-group <rg>
 ```
+
+Or run `cloum add --help` to see all available options.
 
 ### Step 5: Verify Setup
 
