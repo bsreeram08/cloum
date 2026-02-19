@@ -87,13 +87,13 @@ install() {
     version=$(resolve_version)
     echo "Installing cloum ${version}..."
 
-    # Binary names match the GitHub release artifacts
+    # Binary names match the GitHub release artifacts (using bun-darwin/bun-linux/bun-windows format)
     if [ "$os" = "darwin" ]; then
-        binary_name="cloum-macos-${arch}"
+        binary_name="cloum-${os}-${arch}"
     elif [ "$os" = "linux" ]; then
-        binary_name="cloum-linux-${arch}"
+        binary_name="cloum-${os}-${arch}"
     else
-        binary_name="cloum-windows-${arch}.exe"
+        binary_name="cloum-${os}-${arch}.exe"
     fi
 
     url="https://github.com/${REPO}/releases/download/${version}/${binary_name}"
