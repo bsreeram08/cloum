@@ -67,8 +67,10 @@ async function downloadAndReplace(
   const blob = await response.blob();
   const arrayBuffer = await blob.arrayBuffer();
 
-  // Write to temp file first, then replace
-  const tempPath = `${binaryPath}.new`;
+  // Download to temp file first, then atomically replace
+  const tempDir = process.env.TMPDIR || "/tmp";
+  const tempPath = `${tempDir}/cloum-${Date.now()}`;
+  
   await Bun.write(tempPath, new Uint8Array(arrayBuffer));
 
   // Make executable (Unix only)
@@ -76,8 +78,11 @@ async function downloadAndReplace(
     await Bun.spawn(["chmod", "+x", tempPath]);
   }
 
-  // Replace the old binary
-  await Bun.write(binaryPath, await Bun.file(tempPath).arrayBuffer());
+  // Use install command to atomically replace the binary
+  // This handles the case where we're running from the binary itself
+  await Bun.spawn(["install", tempPath, binaryPath]);
+  
+  // Cleanup temp file
   await Bun.spawn(["rm", tempPath]);
 }
 
@@ -174,10 +179,22 @@ export async function updateCommand(force: boolean = false): Promise<void> {
 
   try {
     console.log(`   Downloading: ${asset.name}`);
-    const binaryPath = Bun.argv[0];
-    if (!binaryPath) {
-      throw new Error("Could not determine binary path");
+    // Get the actual binary path - use which command as fallback
+    let binaryPath = Bun.argv[0];
+    
+    // If running as just "bun" or "./", we need to find the actual binary
+    if (!binaryPath || binaryPath === "bun" || binaryPath.includes("bun")) {
+      // Try to find it in PATH
+      const which = Bun.spawnSync(["which", "cloum"]);
+      if (which.stdout.toString().trim()) {
+        binaryPath = which.stdout.toString().trim();
+      } else {
+        // Fallback to default location
+        const home = process.env.HOME || process.env.USERPROFILE;
+        binaryPath = `${home}/.local/bin/cloum`;
+      }
     }
+    
     await downloadAndReplace(asset.browser_download_url, binaryPath);
     console.log(green(`\n✅ Updated to v${latestVersion}!`));
     console.log(`   Restart or run \`cloum --version\` to verify.`);
