@@ -2,9 +2,6 @@ name: Release
 
 on:
   push:
-    branches:
-      - main
-      - master
     tags:
       - 'v*'
 
@@ -12,67 +9,13 @@ permissions:
   contents: write
 
 jobs:
-  bump-version:
-    name: Bump Version
-    runs-on: ubuntu-latest
-    outputs:
-      new_version: ${{ steps.bump.outputs.new_version }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Bump version
-        id: bump
-        run: |
-          # Get current version from version.ts
-          CURRENT_VERSION=$(grep -oP 'VERSION = "\K[^"]+' src/commands/version.ts)
-          echo "Current version: $CURRENT_VERSION"
-          
-          # Bump patch version
-          IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
-          MAJOR=${VERSION_PARTS[0]}
-          MINOR=${VERSION_PARTS[1]}
-          PATCH=${VERSION_PARTS[2]}
-          NEW_PATCH=$((PATCH + 1))
-          NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
-          
-          echo "New version: $NEW_VERSION"
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          
-          # Update version.ts
-          sed -i "s/VERSION = \"$CURRENT_VERSION\"/VERSION = \"$NEW_VERSION\"/" src/commands/version.ts
-          
-          # Update package.json
-          sed -i "s/\"version\": \"$CURRENT_VERSION\"/\"version\": \"$NEW_VERSION\"/" package.json
-          
-          # Fetch tags first to avoid conflicts
-          git fetch --tags origin
-          
-          # Check if tag already exists, if so, skip
-          if git rev-parse "v$NEW_VERSION" >/dev/null 2>&1; then
-            echo "Tag v$NEW_VERSION already exists, skipping bump"
-            exit 0
-          fi
-          
-          # Commit and tag
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add src/commands/version.ts package.json
-          git commit -m "Bump version to $NEW_VERSION"
-          git tag "v$NEW_VERSION"
-          git push origin master --tags || git push origin master --tags --force
-
   release:
     name: Build and Release
-    needs: bump-version
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: v${{ needs.bump-version.outputs.new_version }}
           fetch-depth: 0
 
       - name: Setup Bun
@@ -98,7 +41,6 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ needs.bump-version.outputs.new_version }}
           files: |
             cloum-darwin-x64
             cloum-darwin-arm64

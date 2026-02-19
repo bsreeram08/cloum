@@ -86,7 +86,7 @@ kubectl get nodes       # Verify the connection works
 ## Notes
 
 - Config file: ~/.config/cloum/clusters.json (human-editable JSON)
-- If \`cloum\` is not found, install it: \`curl -sL https://raw.githubusercontent.com/sreeramsa/clowm/master/install.sh | bash\`
+- If \`cloum\` is not found, install it: \`curl -sL https://raw.githubusercontent.com/sreeramsa/cloum/master/install.sh | bash\`
 - For errors, share the full output and the user's OS/shell
 `;
 

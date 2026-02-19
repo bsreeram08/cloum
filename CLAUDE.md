@@ -10,26 +10,26 @@ This is a CLI tool for managing Kubernetes cluster connections across GCP, AWS, 
   1. `src/commands/version.ts` - `export const VERSION = "x.y.z";`
   2. `package.json` - `"version": "x.y.z"`
 
-### Making Changes
+### Making Changes & Release Process
+
+**Manual Release:**
 1. Make your code changes
 2. Update BOTH version.ts and package.json to the new version
 3. Commit with a descriptive message
 4. Tag the commit with `git tag v<version>` 
 5. Push: `git push origin master --tags`
 
-### Release Process
-```bash
-# Update version in both files
-# Commit changes
-git add -A
-git commit -m "Description of changes"
-git tag v1.0.6
-git push origin master --tags
-```
+**Automatic Release (recommended):**
+1. Just push to master/main
+2. The bump-version workflow automatically:
+   - Increments patch version
+   - Updates both version.ts and package.json
+   - Creates a git tag
+3. The release workflow triggers on tag push and builds binaries
 
-This triggers the GitHub Actions workflow which:
-1. Builds binaries for macOS, Linux, Windows
-2. Creates a GitHub Release with the binaries attached
+### Workflows
+- **bump-version.yml**: Runs on branch push, auto-bumps version and creates tag
+- **release.yml**: Runs on tag push, builds binaries and creates GitHub Release
 
 ### Testing Before Release
 ```bash
