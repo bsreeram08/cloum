@@ -86,23 +86,29 @@ kubectl get nodes       # Verify the connection works
 ## Notes
 
 - Config file: ~/.config/cloum/clusters.json (human-editable JSON)
-- If \`cloum\` is not found, install it: \`curl -sL https://raw.githubusercontent.com/sreeramsa/clowm/main/install.sh | bash\`
+- If \`cloum\` is not found, install it: \`curl -sL https://raw.githubusercontent.com/sreeramsa/clowm/master/install.sh | bash\`
 - For errors, share the full output and the user's OS/shell
 `;
 
 /** Print the AI setup prompt to stdout so it can be piped to Claude or copied */
-export async function aiCommand(opts: { readonly open: boolean }): Promise<void> {
+export async function aiCommand(opts: {
+  readonly open: boolean;
+}): Promise<void> {
   if (opts.open) {
     await openInClaude();
     return;
   }
   console.log(SETUP_PROMPT);
-  console.log("\n─────────────────────────────────────────────────────────────────");
+  console.log(
+    "\n─────────────────────────────────────────────────────────────────",
+  );
   console.log("Copy the prompt above and paste it into Claude (claude.ai).");
   console.log("Or pipe it directly:");
   console.log("  cloum ai | pbcopy   # macOS — copies to clipboard");
   console.log("  cloum ai | xclip    # Linux");
-  console.log("─────────────────────────────────────────────────────────────────\n");
+  console.log(
+    "─────────────────────────────────────────────────────────────────\n",
+  );
 }
 
 /** Attempt to open claude.ai in the default browser with the prompt pre-filled */
@@ -111,9 +117,11 @@ async function openInClaude(): Promise<void> {
   const url = `https://claude.ai/new?q=${encoded}`;
 
   const opener =
-    process.platform === "darwin" ? "open" :
-    process.platform === "win32"  ? "start" :
-    "xdg-open";
+    process.platform === "darwin"
+      ? "open"
+      : process.platform === "win32"
+        ? "start"
+        : "xdg-open";
 
   const result = await runCommandSilent(opener, [url]);
   if (result.exitCode !== 0) {

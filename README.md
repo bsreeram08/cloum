@@ -18,7 +18,7 @@ A CLI tool for managing Kubernetes cluster connections across GCP, AWS, and Azur
 ### Quick Install (Binary)
 
 ```bash
-curl -sL https://raw.githubusercontent.com/bsreeram08/cloum/main/install.sh | bash
+curl -sL https://raw.githubusercontent.com/bsreeram08/cloum/master/install.sh | bash
 ```
 
 This downloads the latest release for your platform and installs to `~/.local/bin`.
@@ -73,6 +73,7 @@ cloum import clusters.json
 ```
 
 Example `clusters.json`:
+
 ```json
 {
   "clusters": [

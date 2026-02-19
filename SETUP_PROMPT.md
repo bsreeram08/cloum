@@ -11,7 +11,7 @@ Follow these steps to set up Cloum for the user:
 Run the install script for the user's platform:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/bsreeram08/cloum/main/install.sh | bash
+curl -sL https://raw.githubusercontent.com/bsreeram08/cloum/master/install.sh | bash
 ```
 
 This will download and install the latest binary to `~/.local/bin`.
@@ -19,6 +19,7 @@ This will download and install the latest binary to `~/.local/bin`.
 ### Step 2: Verify Installation
 
 Check that cloum is installed:
+
 ```bash
 cloum --version
 ```
@@ -28,7 +29,7 @@ cloum --version
 Ask the user which cloud providers they need, then check if the required CLIs are installed:
 
 - **GCP**: `gcloud --version`
-- **AWS**: `aws --version`  
+- **AWS**: `aws --version`
 - **Azure**: `az --version`
 - **Kubernetes**: `kubectl version --client`
 
