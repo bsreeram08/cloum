@@ -87,7 +87,7 @@ async function downloadAndReplace(
 }
 
 /** Run the install script as fallback */
-async function runInstallScript(): Promise<void> {
+async function runInstallScript(): Promise<boolean> {
   console.log(yellow(`\n⬇️  Running install script...`));
 
   const proc = Bun.spawn(
@@ -106,8 +106,10 @@ async function runInstallScript(): Promise<void> {
 
   if (proc.exitCode === 0) {
     console.log(green(`\n✅ Update complete!`));
+    return true;
   } else {
     console.log(red(`\n❌ Update script failed with code ${proc.exitCode}`));
+    return false;
   }
 }
 
@@ -173,19 +175,32 @@ export async function updateCommand(force: boolean = false): Promise<void> {
       console.log(`   - ${a.name}`);
     }
     console.log(yellow(`\n   Trying install script instead...`));
-    await runInstallScript();
+    const success = await runInstallScript();
+    if (success) {
+      console.log(green(`\n✅ Updated to v${latestVersion}!`));
+      console.log(`   Restart or run \`cloum --version\` to verify.`);
+    }
     return;
   }
 
+  // Try direct download first
   try {
     console.log(yellow(`   Downloading: ${asset.name}`));
-    // Use the install script - it's more reliable
-    await runInstallScript();
+    
+    // Get the path where cloum is installed
+    const binDir = `${process.env.HOME || "/root"}/.local/share/cloum`;
+    const binaryPath = `${binDir}/cloum`;
+    
+    await downloadAndReplace(asset.browser_download_url, binaryPath);
     console.log(green(`\n✅ Updated to v${latestVersion}!`));
     console.log(`   Restart or run \`cloum --version\` to verify.`);
   } catch (error) {
-    console.log(red(`\n❌ Update failed: ${error}`));
+    console.log(red(`\n❌ Direct download failed: ${error}`));
     console.log(yellow(`   Trying install script as fallback...`));
-    await runInstallScript();
+    const success = await runInstallScript();
+    if (success) {
+      console.log(green(`\n✅ Updated to v${latestVersion}!`));
+      console.log(`   Restart or run \`cloum --version\` to verify.`);
+    }
   }
 }
