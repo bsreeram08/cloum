@@ -124,13 +124,27 @@ export async function updateCommand(force: boolean = false): Promise<void> {
 
   console.log(`   Latest version: ${latestVersion}`);
 
-  // Compare versions
-  if (!force && VERSION === latestVersion) {
+  // Compare versions properly (not as strings)
+  function compareVersions(a: string, b: string): number {
+    const aParts = a.split(".").map(Number);
+    const bParts = b.split(".").map(Number);
+    for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+      const aNum = aParts[i] || 0;
+      const bNum = bParts[i] || 0;
+      if (aNum > bNum) return 1;
+      if (aNum < bNum) return -1;
+    }
+    return 0;
+  }
+
+  const cmp = compareVersions(VERSION, latestVersion);
+  
+  if (!force && cmp === 0) {
     console.log(green(`\n✅ You are on the latest version!`));
     return;
   }
 
-  if (!force && VERSION > latestVersion) {
+  if (!force && cmp > 0) {
     console.log(
       yellow(`\n⚠️  You are on a newer version than latest release.`),
     );
