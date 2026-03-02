@@ -9,22 +9,30 @@ import { parseGcpError, printError } from "../utils/errors.ts";
 
 /** Validate gcloud authentication before any operations, triggering login if needed */
 async function ensureAuthenticated(account?: string): Promise<void> {
-  // First, check if we can get a valid token with current credentials
-  const token = await runCommandSilent("gcloud", [
-    "auth",
-    "print-access-token",
-  ]);
-  
-  if (token.exitCode !== 0) {
-    // Token is invalid/expired, need to login
-    console.log(yellow(`  🔐 Authentication expired — launching gcloud auth login...`));
-    const loginArgs = account ? ["auth", "login", "--account", account] : ["auth", "login"];
-    await runCommand("gcloud", loginArgs);
-    return;
-  }
-  
-  // Token is valid, but if a specific account is requested, ensure we're using it
   if (account) {
+    // Check which accounts already have credentials stored
+    const accountsResult = await runCommandSilent("gcloud", [
+      "auth",
+      "list",
+      "--format=value(account)",
+    ]);
+    const knownAccounts = accountsResult.stdout
+      .trim()
+      .split("\n")
+      .filter(Boolean);
+
+    if (!knownAccounts.includes(account)) {
+      // Account has no stored credentials at all — need a fresh login
+      console.log(
+        yellow(
+          `  🔐 Account ${account} is not authenticated — launching gcloud auth login...`,
+        ),
+      );
+      await runCommand("gcloud", ["auth", "login", "--account", account]);
+      return;
+    }
+
+    // Account exists; check if it is the currently active account
     const current = await runCommandSilent("gcloud", [
       "config",
       "get-value",
@@ -41,19 +49,36 @@ async function ensureAuthenticated(account?: string): Promise<void> {
       if (set.exitCode !== 0) {
         throw new Error(`Failed to switch gcloud account: ${set.stderr}`);
       }
-      // After switching accounts, verify the new token is valid
-      const newToken = await runCommandSilent("gcloud", [
-        "auth",
-        "print-access-token",
-      ]);
-      if (newToken.exitCode !== 0) {
-        console.log(
-          yellow(
-            `  🔐 Token expired for ${account} — launching gcloud auth login...`,
-          ),
-        );
-        await runCommand("gcloud", ["auth", "login", "--account", account]);
-      }
+    }
+
+    // Verify the token for the target account is still valid
+    const token = await runCommandSilent("gcloud", [
+      "auth",
+      "print-access-token",
+      "--account",
+      account,
+    ]);
+    if (token.exitCode !== 0) {
+      console.log(
+        yellow(
+          `  🔐 Token expired for ${account} — launching gcloud auth login...`,
+        ),
+      );
+      await runCommand("gcloud", ["auth", "login", "--account", account]);
+    } else {
+      console.log(green(`  ✅ Using account: ${account}`));
+    }
+  } else {
+    // No specific account required; just verify the current token is valid
+    const token = await runCommandSilent("gcloud", [
+      "auth",
+      "print-access-token",
+    ]);
+    if (token.exitCode !== 0) {
+      console.log(
+        yellow(`  🔐 Authentication expired — launching gcloud auth login...`),
+      );
+      await runCommand("gcloud", ["auth", "login"]);
     }
   }
 }
