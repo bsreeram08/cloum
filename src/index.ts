@@ -14,6 +14,7 @@ import { updateCommand } from "./commands/update.ts";
 import { renameCommand } from "./commands/rename.ts";
 import { describeCommand } from "./commands/describe.ts";
 import { completionCommand } from "./commands/completion.ts";
+import { useCommand } from "./commands/use.ts";
 import { VERSION } from "./commands/version.ts";
 import type { Provider } from "./config/types.ts";
 
@@ -23,66 +24,48 @@ const HELP = `
 cloum — Cloud Manager CLI v${VERSION}
 
 Usage:
-  cloum connect [name] [--namespace <ns>]          Connect to a configured cluster (interactive if no name)
-  cloum list [--provider <p>] [--names-only]       List all configured clusters
-  cloum status                                     Show cloud provider auth status
-  cloum add <provider> [options]                   Add a cluster to config
-  cloum remove <name>                              Remove a cluster from config
-  cloum rename <old> <new>                         Rename a cluster alias
-  cloum describe <name>                            Show detailed info for a cluster
-  cloum import <file.json>                         Import multiple clusters from JSON file
-  cloum discover <provider> [options]              Discover clusters from cloud
-  cloum registry <provider> [options]              Login to container registry
-  cloum clean [gcp|aws|azure] [--all]              Clear cached sessions (provider or all)
-  cloum ai [--open]                                Print AI setup prompt (--open launches Claude)
-  cloum update [--force]                           Check and install latest version
-  cloum completion [bash|zsh|fish]                 Generate shell completion script
-  cloum uninstall                                  Uninstall cloum CLI
-  cloum --version                                  Show version
-  cloum help                                       Show this help message
+  cloum connect [name]          Connect to a cluster (interactive if no name)
+  cloum use <name>              Switch context without re-fetching credentials
+  cloum list                    List all configured clusters
+  cloum status                  Show cloud provider auth status
+  cloum add <provider>          Add a cluster to config
+  cloum remove <name>           Remove a cluster from config
+  cloum rename <old> <new>      Rename a cluster alias
+  cloum describe <name>         Show detailed info for a cluster
+  cloum import <file.json>      Import clusters from a JSON file
+  cloum discover <provider>     Discover clusters from cloud
+  cloum registry <provider>     Login to a container registry
+  cloum clean [provider]        Clear cached sessions
+  cloum ai                      Print AI setup prompt
+  cloum update                  Check and install latest version
+  cloum completion <shell>      Generate shell completion script
+  cloum uninstall               Uninstall cloum CLI
+  cloum --version               Show version
+  cloum help                    Show this help message
 
 Providers: gcp | aws | azure
 
-cloum add options:
+Options (cloum add):
   --name <name>             Cluster alias (required)
   --cluster-name <name>     Cloud cluster name (required)
   --region <region>         Cloud region (required)
   --project <id>            GCP project ID (gcp only, required)
-  --account <email>         gcloud account to activate (gcp only, required)
+  --account <email>         gcloud account (gcp only, required)
   --profile <name>          AWS profile name (aws only)
   --role-arn <arn>          IAM role ARN to assume (aws only)
   --resource-group <rg>     Azure resource group (azure only, required)
   --subscription <id>       Azure subscription (azure only)
 
-cloum discover options:
-  --project <id>            GCP project (gcp)
-  --region <region>         AWS region (aws)
-  --profile <name>          AWS profile (aws)
-  --resource-group <rg>     Azure resource group (azure)
-
-cloum registry options:
-  --region <region>         Cloud region (gcp, aws)
-  --project <id>            GCP project (gcp)
-  --profile <name>          AWS profile (aws)
-  --registry <name>         ACR registry name (azure)
-
 Examples:
-  cloum add gcp --name prod-gke --cluster-name my-cluster --region us-central1 --project my-project --account user@example.com
-  cloum add aws --name staging-eks --cluster-name staging --region us-east-1 --profile staging
-  cloum add azure --name dev-aks --cluster-name dev --region eastus --resource-group dev-rg
+  cloum add gcp --name prod --cluster-name my-cluster \\
+    --region us-central1 --project my-proj --account user@example.com
+  cloum add aws --name staging --cluster-name staging \\
+    --region us-east-1 --profile staging
+  cloum add azure --name dev --cluster-name dev \\
+    --region eastus --resource-group dev-rg
   cloum connect prod-gke
-  cloum connect                                    # interactive cluster picker
-  cloum connect prod-gke --namespace my-ns
-  cloum rename prod-gke prod-gke-v2
-  cloum describe prod-gke
+  cloum use prod-gke             # fast context switch (no cloud API call)
   cloum list --provider gcp
-  cloum remove prod-gke
-  cloum discover gcp --project my-project
-  cloum registry aws --region us-east-1 --profile prod
-  cloum registry all --region us-east-1 --project my-proj --registry myacr
-  cloum clean --all
-  cloum clean gcp
-  cloum ai --open
   cloum completion bash
 `;
 
@@ -291,6 +274,21 @@ Examples:
   cloum completion fish > ~/.config/fish/completions/cloum.fish
 `;
 
+const USE_HELP = `
+cloum use — Switch kubectl context to an already-connected cluster
+
+Usage:
+  cloum use <name>
+
+This switches the active kubectl context without re-fetching credentials
+from the cloud provider. Run 'cloum connect <name>' first if the context
+does not exist yet.
+
+Examples:
+  cloum use prod-gke
+  cloum use staging-eks
+`;
+
 /** Parse --flag value pairs from argv into a flat record */
 function parseFlags(args: string[]): Record<string, string | boolean> {
   const flags: Record<string, string | boolean> = {};
@@ -357,6 +355,18 @@ async function main(): Promise<void> {
         const name = rest[0] && !rest[0].startsWith("--") ? rest[0] : undefined;
         const namespace = flagStr(flags, "namespace");
         await connectCommand(name, namespace);
+        break;
+      }
+
+      case "use": {
+        const flags = parseFlags(rest);
+        if (flags["help"] === true || flags["h"] === true) {
+          console.log(USE_HELP);
+          return;
+        }
+        const name = rest[0];
+        if (!name) throw new Error("Usage: cloum use <name>");
+        await useCommand(name);
         break;
       }
 

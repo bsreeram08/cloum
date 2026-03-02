@@ -2,6 +2,7 @@ import { green, cyan, yellow } from "../utils/colors.ts";
 
 const COMMANDS = [
   "connect",
+  "use",
   "list",
   "status",
   "add",
@@ -25,6 +26,7 @@ const PROVIDERS = ["gcp", "aws", "azure"];
 function cmdDescription(cmd: string): string {
   const descriptions: Record<string, string> = {
     connect: "Connect to a configured cluster",
+    use: "Switch context without re-fetching credentials",
     list: "List all configured clusters",
     status: "Show cloud provider auth status",
     add: "Add a cluster to config",
@@ -70,7 +72,7 @@ function buildBash(): string {
     "  fi",
     "",
     '  case "${words[1]}" in',
-    "    connect|remove|describe|rename)",
+    "    connect|use|remove|describe|rename)",
     '      if [[ "${prev}" == "rename" && ${COMP_CWORD} -eq 3 ]]; then',
     "        return 0",
     "      fi",
@@ -134,7 +136,7 @@ function buildZsh(): string {
     "      ;;",
     "    args)",
     "      case $words[2] in",
-    "        connect|remove|describe)",
+    "        connect|use|remove|describe)",
     "          local clusters",
     `          clusters=(\${(f)"\$(cloum list --names-only 2>/dev/null)"})`,
     "          _describe 'cluster' clusters",
@@ -202,8 +204,8 @@ function buildFish(): string {
     "# Commands",
     fishCmds,
     "",
-    "# connect / remove / describe — complete with cluster names",
-    "for cmd in connect remove describe",
+    "# connect / use / remove / describe — complete with cluster names",
+    "for cmd in connect use remove describe",
     "  complete -c cloum -n \"__fish_seen_subcommand_from $cmd\" -a \"(cloum list --names-only 2>/dev/null)\" -d \"cluster\"",
     "end",
     "",
