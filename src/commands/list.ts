@@ -1,5 +1,5 @@
 import { loadClusters, getConfigPath } from "../config/loader.ts";
-import type { ClusterConfig } from "../config/types.ts";
+import type { ClusterConfig, Provider } from "../config/types.ts";
 
 const PROVIDER_LABELS: Record<string, string> = {
   gcp: "GCP (GKE)",
@@ -32,13 +32,35 @@ function formatRow(cluster: ClusterConfig): string {
   return `  ${cluster.name.padEnd(24)} ${provider.padEnd(16)} ${cluster.region.padEnd(20)} ${detail}`;
 }
 
+export interface ListOptions {
+  provider?: Provider;
+  namesOnly?: boolean;
+}
+
 /** List all configured clusters in a formatted table */
-export async function listCommand(): Promise<void> {
-  const clusters = await loadClusters();
+export async function listCommand(opts: ListOptions = {}): Promise<void> {
+  let clusters = await loadClusters();
+
+  if (opts.provider) {
+    clusters = clusters.filter((c) => c.provider === opts.provider);
+  }
+
+  // --names-only: plain newline-separated names (used by shell completion)
+  if (opts.namesOnly) {
+    for (const c of clusters) {
+      console.log(c.name);
+    }
+    return;
+  }
+
   if (clusters.length === 0) {
-    console.log(`\nNo clusters configured.`);
-    console.log(`Config file: ${getConfigPath()}`);
-    console.log(`\nAdd a cluster with: cloum add <provider> --help`);
+    if (opts.provider) {
+      console.log(`\nNo clusters configured for provider "${opts.provider}".`);
+    } else {
+      console.log(`\nNo clusters configured.`);
+      console.log(`Config file: ${getConfigPath()}`);
+      console.log(`\nAdd a cluster with: cloum add <provider> --help`);
+    }
     return;
   }
   console.log(`\nConfigured clusters (${clusters.length}):`);

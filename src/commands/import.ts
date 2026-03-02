@@ -42,16 +42,20 @@ function validateCluster(
           `Cluster "${name}": missing "project" for GCP cluster`,
         );
       }
+      const account = entry.account;
+      if (!account || typeof account !== "string") {
+        throw new Error(
+          `Cluster "${name}": missing "account" for GCP cluster`,
+        );
+      }
       const cluster: GcpCluster = {
         name,
         provider: "gcp",
         region,
         clusterName,
         project,
+        account,
       };
-      if (entry.account && typeof entry.account === "string") {
-        return { ...cluster, account: entry.account };
-      }
       return cluster;
     }
     case "aws": {

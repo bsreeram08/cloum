@@ -11,6 +11,9 @@ import { removeCommand } from "./commands/remove.ts";
 import { aiCommand } from "./commands/ai.ts";
 import { importCommand } from "./commands/import.ts";
 import { updateCommand } from "./commands/update.ts";
+import { renameCommand } from "./commands/rename.ts";
+import { describeCommand } from "./commands/describe.ts";
+import { completionCommand } from "./commands/completion.ts";
 import { VERSION } from "./commands/version.ts";
 import type { Provider } from "./config/types.ts";
 
@@ -20,20 +23,23 @@ const HELP = `
 cloum — Cloud Manager CLI v${VERSION}
 
 Usage:
-  cloum connect <name>                     Connect to a configured cluster
-  cloum list                               List all configured clusters
-  cloum status                             Show cloud provider auth status
-  cloum add <provider> [options]           Add a cluster to config
-  cloum remove <name>                      Remove a cluster from config
-  cloum import <file.json>                 Import multiple clusters from JSON file
-  cloum discover <provider> [options]      Discover clusters from cloud
-  cloum registry <provider> [options]      Login to container registry
-  cloum clean [gcp|aws|azure] [--all]       Clear cached sessions (provider or all)
-  cloum ai [--open]                        Print AI setup prompt (--open launches Claude)
-  cloum update [--force]                   Check and install latest version
-  cloum uninstall                          Uninstall cloum CLI
-  cloum --version                          Show version
-  cloum help                               Show this help message
+  cloum connect [name] [--namespace <ns>]          Connect to a configured cluster (interactive if no name)
+  cloum list [--provider <p>] [--names-only]       List all configured clusters
+  cloum status                                     Show cloud provider auth status
+  cloum add <provider> [options]                   Add a cluster to config
+  cloum remove <name>                              Remove a cluster from config
+  cloum rename <old> <new>                         Rename a cluster alias
+  cloum describe <name>                            Show detailed info for a cluster
+  cloum import <file.json>                         Import multiple clusters from JSON file
+  cloum discover <provider> [options]              Discover clusters from cloud
+  cloum registry <provider> [options]              Login to container registry
+  cloum clean [gcp|aws|azure] [--all]              Clear cached sessions (provider or all)
+  cloum ai [--open]                                Print AI setup prompt (--open launches Claude)
+  cloum update [--force]                           Check and install latest version
+  cloum completion [bash|zsh|fish]                 Generate shell completion script
+  cloum uninstall                                  Uninstall cloum CLI
+  cloum --version                                  Show version
+  cloum help                                       Show this help message
 
 Providers: gcp | aws | azure
 
@@ -65,6 +71,11 @@ Examples:
   cloum add aws --name staging-eks --cluster-name staging --region us-east-1 --profile staging
   cloum add azure --name dev-aks --cluster-name dev --region eastus --resource-group dev-rg
   cloum connect prod-gke
+  cloum connect                                    # interactive cluster picker
+  cloum connect prod-gke --namespace my-ns
+  cloum rename prod-gke prod-gke-v2
+  cloum describe prod-gke
+  cloum list --provider gcp
   cloum remove prod-gke
   cloum discover gcp --project my-project
   cloum registry aws --region us-east-1 --profile prod
@@ -72,6 +83,7 @@ Examples:
   cloum clean --all
   cloum clean gcp
   cloum ai --open
+  cloum completion bash
 `;
 
 // Subcommand help messages
@@ -178,17 +190,32 @@ const CONNECT_HELP = `
 cloum connect — Connect to a configured cluster
 
 Usage:
-  cloum connect <name>
+  cloum connect [name] [--namespace <ns>]
+
+If no name is provided, an interactive cluster picker is shown.
+
+Options:
+  --namespace <ns>           Set the kubectl namespace after connecting
 
 Examples:
   cloum connect prod-gke
+  cloum connect                     # interactive picker
+  cloum connect prod-gke --namespace my-namespace
 `;
 
 const LIST_HELP = `
 cloum list — List all configured clusters
 
 Usage:
+  cloum list [options]
+
+Options:
+  --provider <gcp|aws|azure>   Filter clusters by provider
+  --names-only                 Output cluster names only (used by shell completion)
+
+Examples:
   cloum list
+  cloum list --provider gcp
 `;
 
 const STATUS_HELP = `
@@ -230,6 +257,38 @@ Options:
 Examples:
   cloum ai
   cloum ai --open
+`;
+
+const RENAME_HELP = `
+cloum rename — Rename a cluster alias
+
+Usage:
+  cloum rename <old-name> <new-name>
+
+Examples:
+  cloum rename prod-gke prod-gke-v2
+`;
+
+const DESCRIBE_HELP = `
+cloum describe — Show detailed configuration for a cluster
+
+Usage:
+  cloum describe <name>
+
+Examples:
+  cloum describe prod-gke
+`;
+
+const COMPLETION_HELP = `
+cloum completion — Generate shell completion script
+
+Usage:
+  cloum completion [bash|zsh|fish]
+
+Examples:
+  source <(cloum completion bash)
+  source <(cloum completion zsh)
+  cloum completion fish > ~/.config/fish/completions/cloum.fish
 `;
 
 /** Parse --flag value pairs from argv into a flat record */
@@ -294,9 +353,10 @@ async function main(): Promise<void> {
           console.log(CONNECT_HELP);
           return;
         }
-        const name = rest[0];
-        if (!name) throw new Error("Usage: cloum connect <name>");
-        await connectCommand(name);
+        // name may be undefined — connectCommand handles interactive picker
+        const name = rest[0] && !rest[0].startsWith("--") ? rest[0] : undefined;
+        const namespace = flagStr(flags, "namespace");
+        await connectCommand(name, namespace);
         break;
       }
 
@@ -306,7 +366,14 @@ async function main(): Promise<void> {
           console.log(LIST_HELP);
           return;
         }
-        await listCommand();
+        const rawProvider = flagStr(flags, "provider");
+        const provider = rawProvider
+          ? parseProvider(rawProvider)
+          : undefined;
+        await listCommand({
+          provider,
+          namesOnly: flags["names-only"] === true,
+        });
         break;
       }
 
@@ -419,6 +486,43 @@ async function main(): Promise<void> {
         const name = rest[0];
         if (!name) throw new Error("Usage: cloum remove <name>");
         await removeCommand(name);
+        break;
+      }
+
+      case "rename": {
+        const flags = parseFlags(rest);
+        if (flags["help"] === true || flags["h"] === true) {
+          console.log(RENAME_HELP);
+          return;
+        }
+        const oldName = rest[0];
+        const newName = rest[1];
+        if (!oldName || !newName)
+          throw new Error("Usage: cloum rename <old-name> <new-name>");
+        await renameCommand(oldName, newName);
+        break;
+      }
+
+      case "describe": {
+        const flags = parseFlags(rest);
+        if (flags["help"] === true || flags["h"] === true) {
+          console.log(DESCRIBE_HELP);
+          return;
+        }
+        const name = rest[0];
+        if (!name) throw new Error("Usage: cloum describe <name>");
+        await describeCommand(name);
+        break;
+      }
+
+      case "completion": {
+        const flags = parseFlags(rest);
+        if (flags["help"] === true || flags["h"] === true) {
+          console.log(COMPLETION_HELP);
+          return;
+        }
+        const shell = rest[0];
+        await completionCommand(shell);
         break;
       }
 
