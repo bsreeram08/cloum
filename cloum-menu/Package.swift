@@ -7,8 +7,7 @@ let package = Package(
   products: [
     .executable(
       name: "cloum-menu",
-      targets: ["MenuApp"],
-      entitlements: "./cloum-menu.entitlements"
+      targets: ["MenuApp"]
     ),
   ],
   dependencies: [],
@@ -21,3 +20,4 @@ let package = Package(
     ),
   ]
 )
+
