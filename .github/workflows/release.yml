@@ -81,7 +81,7 @@ jobs:
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: cloum-${{ matrix.out }}
+          name: ${{ matrix.out }}
           path: |
             ${{ matrix.out }}
             ${{ matrix.out }}.sha256

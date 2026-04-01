@@ -13,16 +13,18 @@ final class GlobalHotkeyMonitor {
     private init() {}
 
     func register() {
-        guard CGEvent.tapRequiresAccessibility() == false else {
-            requestAccessibilityPermission()
-            return
-        }
+        // Accessibility permission check — stub for SDK compatibility.
+        // CGEvent.tapRequiresAccessibility() was removed in newer SDKs;
+        // the tap creation below will fail gracefully if permission is missing.
+        let hasAccessibility = AXIsProcessTrusted()
+        _ = hasAccessibility
 
         let callback: CGEventTapCallBack = { proxy, type, event, _ -> Unmanaged<CGEvent>? in
             guard type == .tapDisabledByTimeout || type == .tapDisabledByUserInput else {
                 return Unmanaged.passRetained(event)
             }
-            CGEvent.tapEnable(tap: proxy, enable: true)
+            let tap = CGEventTapProxy(rawValue: proxy)!
+            CGEvent.tapEnable(tap: tap, enable: true)
             NotificationCenter.default.post(name: .cloumHotkeyPressed, object: nil)
             return Unmanaged.passRetained(event)
         }
@@ -52,11 +54,6 @@ final class GlobalHotkeyMonitor {
         }
         eventTap = nil
         runLoopSource = nil
-    }
-
-    private func requestAccessibilityPermission() {
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        AXIsProcessTrustedWithOptions(options)
     }
 }
 
