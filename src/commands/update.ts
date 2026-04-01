@@ -220,7 +220,8 @@ export async function updateCommand(force: boolean = false): Promise<void> {
     
     // Resolve the actual running binary's path so we replace the right file
     const binaryPath = await resolveRunningBinaryPath();
-    
+    console.log(yellow(`   Installing to: ${binaryPath}`));
+
     await downloadAndReplace(asset.browser_download_url, binaryPath);
     console.log(green(`\n✅ Updated to v${latestVersion}!`));
     console.log(`   Restart or run \`cloum --version\` to verify.`);
