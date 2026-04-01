@@ -68,22 +68,29 @@ async function downloadAndReplace(
   const arrayBuffer = await blob.arrayBuffer();
 
   // Download to temp file first, then atomically replace
-  const tempDir = process.env.TMPDIR || "/tmp";
+  const tempDir = process.env.TMPDIR ?? "/tmp";
   const tempPath = `${tempDir}/cloum-${Date.now()}`;
-  
+
+  // Ensure temp dir exists
   await Bun.write(tempPath, new Uint8Array(arrayBuffer));
 
-  // Make executable (Unix only)
+  // Make executable (Unix only), then install, then cleanup — all sequential
   if (process.platform !== "win32") {
-    await Bun.spawn(["chmod", "+x", tempPath]);
+    const chmod = Bun.spawn(["chmod", "+x", tempPath]);
+    await chmod.exited;
   }
 
   // Use install command to atomically replace the binary
-  // This handles the case where we're running from the binary itself
-  await Bun.spawn(["install", tempPath, binaryPath]);
-  
-  // Cleanup temp file
-  await Bun.spawn(["rm", tempPath]);
+  // install(1) handles the case where we're replacing the running binary
+  const installProc = Bun.spawn(["install", tempPath, binaryPath]);
+  const installExit = await installProc.exited;
+  if (installExit !== 0) {
+    throw new Error(`install command failed with code ${installExit}`);
+  }
+
+  // Cleanup temp file after install succeeds
+  const rmProc = Bun.spawn(["rm", tempPath]);
+  await rmProc.exited;
 }
 
 /** Run the install script as fallback */
