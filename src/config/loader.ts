@@ -41,6 +41,12 @@ export async function findCluster(name: string): Promise<ClusterConfig> {
   return match;
 }
 
+/** Return all clusters that have been marked as favourites, in order */
+export async function getFavorites(): Promise<ClusterConfig[]> {
+  const clusters = await loadClusters();
+  return clusters.filter((c) => c.favorite === true);
+}
+
 /** Return the resolved config file path for display purposes */
 export function getConfigPath(): string {
   return CONFIG_PATH;

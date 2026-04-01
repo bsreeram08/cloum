@@ -16,6 +16,9 @@ import { describeCommand } from "./commands/describe.ts";
 import { completionCommand } from "./commands/completion.ts";
 import { useCommand } from "./commands/use.ts";
 import { VERSION } from "./commands/version.ts";
+import { favoriteAddCommand, favoriteRemoveCommand, favoriteListCommand } from "./commands/favorite.ts";
+import { quickCommand } from "./commands/quick.ts";
+import { trayCommand } from "./commands/tray.ts";
 import type { Provider } from "./config/types.ts";
 
 const VALID_PROVIDERS: Provider[] = ["gcp", "aws", "azure"];
@@ -36,6 +39,12 @@ Usage:
   cloum discover <provider>     Discover clusters from cloud
   cloum registry <provider>     Login to a container registry
   cloum clean [provider]        Clear cached sessions
+  cloum favorite add <name>     Mark a cluster as a favourite
+  cloum favorite remove <name>  Remove a cluster from favourites
+  cloum favorite list           List favourite clusters
+  cloum quick <number>          Quick-connect to favourite #N  (alias: cloum N)
+  cloum tray install            Install macOS menu bar app (macOS only)
+  cloum tray start|stop|status  Manage the macOS menu bar app
   cloum ai                      Print AI setup prompt
   cloum update                  Check and install latest version
   cloum completion <shell>      Generate shell completion script
@@ -66,6 +75,9 @@ Examples:
   cloum connect prod-gke
   cloum use prod-gke             # fast context switch (no cloud API call)
   cloum list --provider gcp
+  cloum favorite add prod-gke    # mark as favourite
+  cloum quick 1                  # instant connect to favourite #1
+  cloum 1                        # shorthand for cloum quick 1
   cloum completion bash
 `;
 
@@ -289,6 +301,58 @@ Examples:
   cloum use staging-eks
 `;
 
+const FAVORITE_HELP = `
+cloum favorite — Manage favourite clusters for quick-connect
+
+Usage:
+  cloum favorite add <name>     Mark a cluster as a favourite
+  cloum favorite remove <name>  Remove a cluster from favourites
+  cloum favorite list           List all favourites with their quick-connect index
+
+Favourites can be connected to instantly with:
+  cloum quick <number>   or   cloum <number>
+
+Examples:
+  cloum favorite add prod-gke
+  cloum favorite remove prod-gke
+  cloum favorite list
+  cloum quick 1           # connect to favourite #1
+  cloum 1                 # shorthand
+`;
+
+const QUICK_HELP = `
+cloum quick — Quick-connect to a favourite cluster by number
+
+Usage:
+  cloum quick <number> [--namespace <ns>]
+
+Shorthand: cloum <number>   (e.g. cloum 1)
+
+Options:
+  --namespace <ns>    Set kubectl namespace after connecting
+
+Examples:
+  cloum quick 1
+  cloum 2
+  cloum quick 1 --namespace production
+`;
+
+const TRAY_HELP = `
+cloum tray — macOS menu bar companion (macOS only)
+
+Usage:
+  cloum tray install        Compile & install the menu bar app + auto-start agent
+  cloum tray start          Start (or restart) the menu bar app
+  cloum tray stop           Stop the running menu bar app
+  cloum tray status         Show whether the menu bar app is running
+  cloum tray uninstall      Remove binary and LaunchAgent
+
+Examples:
+  cloum tray install
+  cloum tray status
+  cloum tray stop
+`;
+
 /** Parse --flag value pairs from argv into a flat record */
 function parseFlags(args: string[]): Record<string, string | boolean> {
   const flags: Record<string, string | boolean> = {};
@@ -334,6 +398,14 @@ async function main(): Promise<void> {
   if (!command) {
     console.log(HELP);
     process.exit(0);
+  }
+
+  // Numeric shorthand: `cloum 1` → `cloum quick 1`
+  if (/^\d+$/.test(command)) {
+    const flags = parseFlags(rest);
+    const namespace = flagStr(flags, "namespace");
+    await quickCommand(command, namespace);
+    return;
   }
 
   try {
@@ -565,6 +637,54 @@ async function main(): Promise<void> {
           return;
         }
         await updateCommand(flags["force"] === true);
+        break;
+      }
+
+      case "favorite":
+      case "fav": {
+        const flags = parseFlags(rest);
+        if (flags["help"] === true || flags["h"] === true) {
+          console.log(FAVORITE_HELP);
+          return;
+        }
+        const sub = rest[0];
+        const targetName = rest[1];
+        if (sub === "add") {
+          if (!targetName) throw new Error("Usage: cloum favorite add <name>");
+          await favoriteAddCommand(targetName);
+        } else if (sub === "remove" || sub === "rm") {
+          if (!targetName) throw new Error("Usage: cloum favorite remove <name>");
+          await favoriteRemoveCommand(targetName);
+        } else if (sub === "list" || sub === "ls" || !sub) {
+          await favoriteListCommand();
+        } else {
+          throw new Error(
+            `Unknown favorite sub-command "${sub}". Use: add | remove | list`,
+          );
+        }
+        break;
+      }
+
+      case "quick": {
+        const flags = parseFlags(rest);
+        if (flags["help"] === true || flags["h"] === true) {
+          console.log(QUICK_HELP);
+          return;
+        }
+        const indexArg = rest[0];
+        if (!indexArg) throw new Error("Usage: cloum quick <number>");
+        const namespace = flagStr(flags, "namespace");
+        await quickCommand(indexArg, namespace);
+        break;
+      }
+
+      case "tray": {
+        const flags = parseFlags(rest);
+        if (flags["help"] === true || flags["h"] === true) {
+          console.log(TRAY_HELP);
+          return;
+        }
+        await trayCommand(rest);
         break;
       }
 

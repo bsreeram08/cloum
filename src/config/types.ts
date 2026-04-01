@@ -6,6 +6,8 @@ interface BaseCluster {
   readonly name: string;
   readonly provider: Provider;
   readonly region: string;
+  /** Whether this cluster is marked as a favourite for quick-connect */
+  readonly favorite?: boolean;
 }
 
 /** GKE cluster configuration */
