@@ -87,7 +87,7 @@ jobs:
             ${{ matrix.out }}.sha256
 
   # ---------------------------------------------------------------------------
-  # Build cloum-menu (macOS only)
+  # Build cloum-menu as .app bundle (macOS only)
   # ---------------------------------------------------------------------------
   menu:
     name: Build cloum-menu
@@ -97,23 +97,39 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Build Swift package
+      - name: Install XcodeGen
+        run: |
+          which xcodegen && echo "Already installed" && exit 0
+          brew install xcodegen
+
+      - name: Generate Xcode project
         run: |
           cd cloum-menu
-          swift build --configuration release
-          echo "Built: $(ls .build/release/cloum-menu 2>/dev/null && echo 'OK' || echo 'MISSING')"
+          xcodegen generate
+          echo "Generated: $(ls *.xcodeproj 2>/dev/null && echo 'OK' || echo 'MISSING')"
 
-      - name: Codesign (ad-hoc, no signing identity — for distribution outside App Store)
+      - name: Build .app bundle
         run: |
-          codesign --force --sign - \
-            cloum-menu/.build/release/cloum-menu 2>/dev/null || \
-            echo "Code signing skipped (no identity available)"
+          cd cloum-menu
+          xcodebuild -project cloum-menu.xcodeproj \
+            -scheme cloum-menu \
+            -configuration Release \
+            -derivedDataPath build \
+            PRODUCT_BUNDLE_PATH=build/Build/Products/Release/cloum-menu.app \
+            build
+          echo "Built: $(ls build/Build/Products/Release/cloum-menu.app 2>/dev/null && echo 'OK' || echo 'MISSING')"
 
-      - name: Upload cloum-menu
+      - name: Zip .app bundle
+        run: |
+          cd cloum-menu/build/Build/Products/Release
+          zip -r cloum-menu-macos.zip cloum-menu.app
+          echo "Zipped: $(ls -lh cloum-menu-macos.zip 2>/dev/null)"
+
+      - name: Upload cloum-menu .app bundle
         uses: actions/upload-artifact@v4
         with:
-          name: cloum-menu
-          path: cloum-menu/.build/release/cloum-menu
+          name: cloum-menu-macos
+          path: cloum-menu/build/Build/Products/Release/cloum-menu-macos.zip
 
   # ---------------------------------------------------------------------------
   # Build install script + verify
