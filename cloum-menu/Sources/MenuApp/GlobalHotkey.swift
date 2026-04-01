@@ -13,19 +13,16 @@ final class GlobalHotkeyMonitor {
     private init() {}
 
     func register() {
-        // Accessibility permission check — stub for SDK compatibility.
-        // CGEvent.tapRequiresAccessibility() was removed in newer SDKs;
-        // the tap creation below will fail gracefully if permission is missing.
-        let hasAccessibility = AXIsProcessTrusted()
-        _ = hasAccessibility
+        // Request accessibility permission if needed — the tap creation will
+        // fail gracefully if permission is not granted.
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        AXIsProcessTrustedWithOptions(options)
 
-        let callback: CGEventTapCallBack = { proxy, type, event, _ -> Unmanaged<CGEvent>? in
-            guard type == .tapDisabledByTimeout || type == .tapDisabledByUserInput else {
-                return Unmanaged.passRetained(event)
+        let callback: CGEventTapCallBack = { _, type, event, _ -> Unmanaged<CGEvent>? in
+            // Post notification on any tap event
+            if type == .keyDown {
+                NotificationCenter.default.post(name: .cloumHotkeyPressed, object: nil)
             }
-            let tap = CGEventTapProxy(rawValue: proxy)!
-            CGEvent.tapEnable(tap: tap, enable: true)
-            NotificationCenter.default.post(name: .cloumHotkeyPressed, object: nil)
             return Unmanaged.passRetained(event)
         }
 
