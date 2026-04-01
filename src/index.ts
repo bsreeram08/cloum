@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 import { green, yellow, red, cyan } from "./utils/colors.ts";
+import { jsonSuccess, jsonError, EXIT_CODES } from "./utils/output.ts";
+import { CloumError } from "./utils/errors.ts";
 import { connectCommand } from "./commands/connect.ts";
 import { listCommand } from "./commands/list.ts";
 import { statusCommand } from "./commands/status.ts";
@@ -15,6 +17,7 @@ import { renameCommand } from "./commands/rename.ts";
 import { describeCommand } from "./commands/describe.ts";
 import { completionCommand } from "./commands/completion.ts";
 import { useCommand } from "./commands/use.ts";
+import { askCommand } from "./commands/ask.ts";
 import { VERSION } from "./commands/version.ts";
 import type { Provider } from "./config/types.ts";
 
@@ -366,7 +369,8 @@ async function main(): Promise<void> {
         }
         const name = rest[0];
         if (!name) throw new Error("Usage: cloum use <name>");
-        await useCommand(name);
+        const namespace = flagStr(flags, "namespace");
+        await useCommand(name, namespace);
         break;
       }
 
@@ -383,6 +387,7 @@ async function main(): Promise<void> {
         await listCommand({
           provider,
           namesOnly: flags["names-only"] === true,
+          json: flags["json"] === true || flags["j"] === true,
         });
         break;
       }
@@ -393,7 +398,9 @@ async function main(): Promise<void> {
           console.log(STATUS_HELP);
           return;
         }
-        await statusCommand();
+        await statusCommand({
+          json: flags["json"] === true || flags["j"] === true,
+        });
         break;
       }
 
@@ -593,6 +600,19 @@ async function main(): Promise<void> {
         break;
       }
 
+      case "ask": {
+        // cloum ask "natural language prompt" [--execute] [--plan] [--json]
+        // Remaining args after flags are the prompt string
+        const promptArgs = rest.filter((a) => !a.startsWith("--"));
+        const prompt = promptArgs.join(" ").trim();
+        const execute = rest.includes("--execute");
+        const plan = rest.includes("--plan");
+        const json = rest.includes("--json") || rest.includes("-j");
+        const noInteractive = rest.includes("--no-interactive") || rest.includes("-y");
+        await askCommand({ prompt, execute, plan, json, noInteractive });
+        break;
+      }
+
       case "version":
       case "--version":
       case "-v": {
@@ -606,6 +626,16 @@ async function main(): Promise<void> {
         process.exit(1);
     }
   } catch (err) {
+    // Typed errors with exit codes
+    if (err instanceof CloumError) {
+      if (err.code === "NOT_FOUND") {
+        console.error(`\nError: ${err.message}\n`);
+      } else {
+        console.error(`\nError: ${err.message}\n`);
+        if (err.details) console.error(`Details: ${err.details}`);
+      }
+      process.exit(err.exitCode);
+    }
     const message = err instanceof Error ? err.message : String(err);
     console.error(`\nError: ${message}\n`);
     process.exit(1);

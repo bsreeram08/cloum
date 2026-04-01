@@ -36,9 +36,10 @@
     "build": "bun build ./src/index.ts --compile --outfile dist/cloum"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/node": "^25.5.0"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^6.0.2"
   }
 }

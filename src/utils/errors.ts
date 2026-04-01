@@ -1,10 +1,32 @@
 import { red, cyan } from "./colors.ts";
+import type { CloumErrorCode } from "./output.ts";
+import { EXIT_CODES } from "./output.ts";
 
 /** Structured error with actionable hint */
 export interface ParsedError {
   message: string;
   hint?: string;
   shouldRetry?: boolean;
+}
+
+/**
+ * Thrown errors that carry a typed CloumErrorCode.
+ * The CLI entry point maps these to exit codes.
+ */
+export class CloumError extends Error {
+  constructor(
+    message: string,
+    public readonly code: CloumErrorCode,
+    public readonly details?: string,
+  ) {
+    super(message);
+    this.name = "CloumError";
+  }
+
+  /** Exit code derived from the error code */
+  get exitCode(): number {
+    return EXIT_CODES[this.code];
+  }
 }
 
 /**

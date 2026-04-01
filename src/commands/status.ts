@@ -8,10 +8,10 @@ import {
   yellow,
   blue,
   cyan,
-  orange,
   gray,
 } from "../utils/colors.ts";
 import type { ProviderStatus } from "../config/types.ts";
+import { jsonSuccess } from "../utils/output.ts";
 
 const PROVIDER_LABEL: Record<string, string> = {
   gcp: "🔵 GCP  ",
@@ -77,8 +77,13 @@ async function kubectlStatus(): Promise<void> {
   }
 }
 
+export interface StatusOptions {
+  json?: boolean;
+}
+
 /** Display authentication status for all cloud providers and kubectl */
-export async function statusCommand(): Promise<void> {
+export async function statusCommand(opts: StatusOptions = {}): Promise<void> {
+  const start = Date.now();
   console.log(cyan(`\n🔍 Cloud Provider Authentication Status\n`));
   console.log(`  ${"─".repeat(60)}`);
 

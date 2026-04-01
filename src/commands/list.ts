@@ -1,5 +1,6 @@
 import { loadClusters, getConfigPath } from "../config/loader.ts";
 import type { ClusterConfig, Provider } from "../config/types.ts";
+import { jsonSuccess } from "../utils/output.ts";
 
 const PROVIDER_LABELS: Record<string, string> = {
   gcp: "GCP (GKE)",
@@ -35,10 +36,12 @@ function formatRow(cluster: ClusterConfig): string {
 export interface ListOptions {
   provider?: Provider;
   namesOnly?: boolean;
+  json?: boolean;
 }
 
 /** List all configured clusters in a formatted table */
 export async function listCommand(opts: ListOptions = {}): Promise<void> {
+  const start = Date.now();
   let clusters = await loadClusters();
 
   if (opts.provider) {
@@ -50,6 +53,41 @@ export async function listCommand(opts: ListOptions = {}): Promise<void> {
     for (const c of clusters) {
       console.log(c.name);
     }
+    return;
+  }
+
+  if (opts.json) {
+    const data = {
+      clusters: clusters.map((c) => {
+        let detail = "";
+        switch (c.provider) {
+          case "gcp": {
+            const g = c as { project: string; account?: string };
+            detail = `project=${g.project}`;
+            if (g.account) detail += `, account=${g.account}`;
+            break;
+          }
+          case "aws":
+            detail = c.profile
+              ? `profile=${c.profile}`
+              : "default";
+            break;
+          case "azure":
+            detail = `rg=${c.resourceGroup}`;
+            break;
+        }
+        return {
+          name: c.name,
+          provider: c.provider,
+          region: c.region,
+          isFavorite: !!(c as { isFavorite?: boolean }).isFavorite,
+          detail,
+        };
+      }),
+      total: clusters.length,
+      provider: opts.provider ?? null,
+    };
+    console.log(jsonSuccess(data, "list", start));
     return;
   }
 
