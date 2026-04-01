@@ -18,6 +18,9 @@ import { describeCommand } from "./commands/describe.ts";
 import { completionCommand } from "./commands/completion.ts";
 import { useCommand } from "./commands/use.ts";
 import { askCommand } from "./commands/ask.ts";
+import { configCommand, syncCommand } from "./commands/config.ts";
+import { favoriteCommand } from "./commands/favorite.ts";
+import { runDaemon } from "./helper/daemon.ts";
 import { VERSION } from "./commands/version.ts";
 import type { Provider } from "./config/types.ts";
 
@@ -473,6 +476,49 @@ async function main(): Promise<void> {
           registry: flagStr(registryFlags, "registry"),
           all: registryFlags["all"] === true,
         });
+        break;
+      }
+
+      case "config": {
+        // cloum config [--json]
+        const flags = parseFlags(rest);
+        await configCommand({ json: flags["json"] === true || flags["j"] === true });
+        break;
+      }
+
+      case "sync": {
+        // cloum sync [--status] [--enable [--gist-id <id>]] [--push] [--pull] [--disable] [--json]
+        const flags = parseFlags(rest);
+        const token = typeof flags["token"] === "string" ? flags["token"] : undefined;
+        await syncCommand({
+          json: flags["json"] === true || flags["j"] === true,
+          enable: flags["enable"] === true,
+          disable: flags["disable"] === true,
+          push: flags["push"] === true,
+          pull: flags["pull"] === true,
+          status: flags["status"] === true,
+          gistId: typeof flags["gist-id"] === "string" ? flags["gist-id"] : undefined,
+          token,
+        });
+        break;
+      }
+
+      case "favorite":
+      case "favorites": {
+        // cloum favorite <name>   — toggle favorite
+        // cloum favorites         — list all favorites
+        const flags = parseFlags(rest);
+        const name = rest.find((a) => !a.startsWith("--"));
+        await favoriteCommand(name, {
+          json: flags["json"] === true || flags["j"] === true,
+          list: command === "favorites" || flags["list"] === true,
+        });
+        break;
+      }
+
+      case "helper": {
+        // cloum helper [start|stop|status|shell]
+        await runDaemon();
         break;
       }
 
