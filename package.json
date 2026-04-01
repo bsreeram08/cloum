@@ -1,7 +1,7 @@
 {
   "name": "cloum",
-  "version": "1.2.1",
-  "description": "A CLI tool for managing Kubernetes cluster connections across GCP, AWS, and Azure",
+  "version": "1.3.0",
+  "description": "Cloud Manager CLI — Kubernetes cluster connections for GCP, AWS, Azure with cloud sync and menu bar app",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bsreeram08/cloum.git"
@@ -33,13 +33,24 @@
   "scripts": {
     "start": "bun run src/index.ts",
     "typecheck": "tsc --noEmit",
-    "build": "bun build ./src/index.ts --compile --outfile dist/cloum"
+    "lint": "eslint src/ --ext .ts",
+    "lint:fix": "eslint src/ --ext .ts --fix",
+    "build": "bun build ./src/index.ts --compile --outfile dist/cloum",
+    "build:all": "bun build ./src/index.ts --compile --target=bun-darwin-arm64 --outfile=dist/cloum-darwin-arm64 && bun build ./src/index.ts --compile --target=bun-darwin-x64 --outfile=dist/cloum-darwin-x64 && bun build ./src/index.ts --compile --target=bun-linux-x64 --outfile=dist/cloum-linux-x64 && bun build ./src/index.ts --compile --target=bun-windows-x64 --outfile=dist/cloum-windows-x64.exe",
+    "test": "bun run src/index.ts list && bun run src/index.ts config --json && bun run src/index.ts sync --status",
+    "smoke": "bun run src/index.ts --version && bun run src/index.ts list && bun run src/index.ts status && bun run src/index.ts config --json && bun run src/index.ts favorites && bun run src/index.ts --help | grep -q cloum",
+    "audit": "bun audit --audit-level=high"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/node": "^25.5.0"
+    "@types/node": "^22.0.0",
+    "eslint": "^9.0.0",
+    "typescript": "^5.5.0"
   },
   "peerDependencies": {
-    "typescript": "^6.0.2"
+    "typescript": "^5.5.0"
+  },
+  "dependencies": {
+    "typescript": "^5.5.0"
   }
 }
