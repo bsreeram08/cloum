@@ -1,16 +1,16 @@
 import AppKit
 
-/// Menu bar icon states
+// MARK: - Menu Icon
+
 enum MenuIcon: String {
     case connected    = "🟢"
     case disconnected = "⚪"
     case syncing      = "🔄"
     case error        = "🔴"
 
-    var menuIcon: NSImage {
+    var menuImage: NSImage {
         let font = NSFont.systemFont(ofSize: 14)
         let attrs: [NSAttributedString.Key: Any] = [.font: font]
-        let size = (rawValue as NSString).size(withAttributes: attrs)
         let img = NSImage(size: NSSize(width: 20, height: 18))
         img.lockFocus()
         (rawValue as NSString).draw(at: .zero, withAttributes: attrs)
@@ -20,54 +20,47 @@ enum MenuIcon: String {
     }
 }
 
-/// Main menu bar controller
+// MARK: - Types
+
+struct ClusterItem: Identifiable, Hashable {
+    let id = UUID()
+    let name: String
+    let provider: String
+    let region: String
+    let isFavorite: Bool
+}
+
+struct AuthStatus {
+    var gcp = false; var aws = false; var azure = false
+    var gcpIdentity: String?; var awsIdentity: String?; var azureIdentity: String?
+}
+
+struct AppState {
+    var icon: MenuIcon = .disconnected
+    var clusters: [ClusterItem] = []
+    var favorites: [ClusterItem] = []
+    var auth: AuthStatus?
+    var syncEnabled = false
+    var lastSync: String?
+    var error: String?
+}
+
+// MARK: - Menu Bar Controller
+
 final class MenuBarController: NSObject {
 
     private var statusItem: NSStatusItem!
-    private var menu: NSMenu!
-
-    // ---- menu items (rebuilt on refresh) ----
-    private var clustersMenu: NSMenu!
-    private var statusMenuItem: NSMenuItem!
-    private var syncMenuItem: NSMenuItem!
-    private var authMenuItem: NSMenuItem!
-
-    private var state: AppState = .disconnected
-
-    struct AppState {
-        var icon: MenuIcon = .disconnected
-        var clusters: [ClusterItem] = []
-        var favorites: [ClusterItem] = []
-        var auth: AuthStatus?
-        var syncEnabled: Bool = false
-        var lastSync: String?
-        var error: String?
-    }
-
-    struct ClusterItem: Identifiable {
-        let id = UUID()
-        let name: String
-        let provider: String  // "gcp" | "aws" | "azure"
-        let region: String
-        let isFavorite: Bool
-    }
-
-    struct AuthStatus {
-        var gcp: Bool = false; var aws: Bool = false; var azure: Bool = false
-        var gcpIdentity: String?; var awsIdentity: String?; var azureIdentity: String?
-    }
+    private var state = AppState()
 
     override init() {
         super.init()
         setupStatusItem()
-        buildMenu()
         refreshDaemonState()
     }
 
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.menu = nil // we'll attach on click
-        statusItem.button?.image = MenuIcon.disconnected.menuIcon
+        statusItem.button?.image = MenuIcon.disconnected.menuImage
         statusItem.button?.action = #selector(statusItemClicked)
         statusItem.button?.target = self
     }
@@ -78,19 +71,16 @@ final class MenuBarController: NSObject {
         statusItem.button?.performClick(nil)
     }
 
-    // -------------------------------------------------------------------------
-    // Build the full menu
-    // -------------------------------------------------------------------------
+    // MARK: - Build Menu
 
     private func buildMenu() -> NSMenu {
         let m = NSMenu()
 
-        // -- Status header --
         let title: String
         switch state.icon {
-        case .connected:  title = "cloum  \(MenuIcon.connected.rawValue)  Connected"
-        case .error:      title = "cloum  \(MenuIcon.error.rawValue)  Error"
-        case .syncing:    title = "cloum  \(MenuIcon.syncing.rawValue)  Syncing"
+        case .connected:   title = "cloum  \(MenuIcon.connected.rawValue)  Connected"
+        case .error:       title = "cloum  \(MenuIcon.error.rawValue)  Error"
+        case .syncing:     title = "cloum  \(MenuIcon.syncing.rawValue)  Syncing"
         case .disconnected: title = "cloum  \(MenuIcon.disconnected.rawValue)  Disconnected"
         }
         let hdr = NSMenuItem(title: title, action: nil, keyEquivalent: "")
@@ -98,36 +88,34 @@ final class MenuBarController: NSObject {
         m.addItem(hdr)
         m.addItem(NSMenuItem.separator())
 
-        // -- Favorites section (★ at top) --
+        // Favorites
         if !state.favorites.isEmpty {
-            let favHeader = NSMenuItem(title: "★  Favorites", action: nil, keyEquivalent: "")
-            favHeader.isEnabled = false
-            m.addItem(favHeader)
-            for cluster in state.favorites {
-                m.addItem(clusterMenuItem(cluster, starred: true))
+            let favHdr = NSMenuItem(title: "★  Favorites", action: nil, keyEquivalent: "")
+            favHdr.isEnabled = false
+            m.addItem(favHdr)
+            for (idx, cluster) in state.favorites.prefix(9).enumerated() {
+                m.addItem(clusterMenuItem(cluster, starred: true, idx: idx))
             }
             m.addItem(NSMenuItem.separator())
         }
 
-        // -- All Clusters submenu --
-        let clustersSubmenu = NSMenu()
-        let clustersHeader = NSMenuItem(title: "All Clusters", action: nil, keyEquivalent: "")
-        clustersHeader.submenu = clustersSubmenu
+        // All Clusters submenu
+        let submenu = NSMenu()
+        let allHdr = NSMenuItem(title: "All Clusters", action: nil, keyEquivalent: "")
+        allHdr.submenu = submenu
 
         if state.clusters.isEmpty {
             let empty = NSMenuItem(title: "  No clusters", action: nil, keyEquivalent: "")
             empty.isEnabled = false
-            clustersSubmenu.addItem(empty)
+            submenu.addItem(empty)
         } else {
             for cluster in state.clusters {
-                clustersSubmenu.addItem(clusterMenuItem(cluster, starred: false))
+                submenu.addItem(clusterMenuItem(cluster, starred: false, idx: nil))
             }
         }
 
-        m.addItem(clustersHeader)
-        clustersHeader.submenu = clustersSubmenu
+        m.addItem(allHdr)
 
-        // -- Connect to new cluster --
         m.addItem(NSMenuItem.separator())
         let addItem_ = NSMenuItem(title: "Discover New Cluster...", action: #selector(discoverClusters), keyEquivalent: "d")
         addItem_.keyEquivalentModifierMask = [.command]
@@ -136,65 +124,57 @@ final class MenuBarController: NSObject {
 
         m.addItem(NSMenuItem.separator())
 
-        // -- Auth status --
+        // Auth
         if let auth = state.auth {
-            let authHeader = NSMenuItem(title: "Auth Status", action: nil, keyEquivalent: "")
-            authHeader.isEnabled = false
-            m.addItem(authHeader)
+            let authHdr = NSMenuItem(title: "Auth Status", action: nil, keyEquivalent: "")
+            authHdr.isEnabled = false
+            m.addItem(authHdr)
+            authHdr.submenu = NSMenu()
 
-            func authRow(provider: String, ok: Bool, identity: String?) -> NSMenuItem {
-                let icon = ok ? "✅" : "❌"
-                let id = identity ?? (ok ? "authenticated" : "not set")
-                return NSMenuItem(title: "  \(icon) \(provider.uppercased()): \(id)", action: nil, keyEquivalent: "")
-            }
-            authHeader.submenu = NSMenu()
-            authHeader.submenu?.addItem(authRow(provider: "GCP", ok: auth.gcp, identity: auth.gcpIdentity))
-            authHeader.submenu?.addItem(authRow(provider: "AWS", ok: auth.aws, identity: auth.awsIdentity))
-            authHeader.submenu?.addItem(authRow(provider: "Azure", ok: auth.azure, identity: auth.azureIdentity))
-            authHeader.submenu?.addItem(NSMenuItem.separator())
+            authHdr.submenu?.addItem(authRow("GCP",   ok: auth.gcp,   identity: auth.gcpIdentity))
+            authHdr.submenu?.addItem(authRow("AWS",   ok: auth.aws,   identity: auth.awsIdentity))
+            authHdr.submenu?.addItem(authRow("Azure", ok: auth.azure, identity: auth.azureIdentity))
+            authHdr.submenu?.addItem(NSMenuItem.separator())
             let reauth = NSMenuItem(title: "Re-authenticate All...", action: #selector(reauthAll), keyEquivalent: "")
             reauth.target = self
-            authHeader.submenu?.addItem(reauth)
+            authHdr.submenu?.addItem(reauth)
         }
 
-        // -- Cloud Sync --
-        let syncHeader = NSMenuItem(title: "Cloud Sync", action: nil, keyEquivalent: "")
-        syncHeader.submenu = NSMenu()
-        let syncEnabled = NSMenuItem(
+        // Cloud Sync
+        let syncHdr = NSMenuItem(title: "Cloud Sync", action: nil, keyEquivalent: "")
+        syncHdr.submenu = NSMenu()
+        syncHdr.submenu?.addItem(NSMenuItem(
             title: state.syncEnabled ? "✅  Sync Enabled" : "❌  Sync Disabled",
             action: nil, keyEquivalent: ""
-        )
-        syncEnabled.isEnabled = false
-        syncHeader.submenu?.addItem(syncEnabled)
-
+        ))
         if let last = state.lastSync {
-            syncHeader.submenu?.addItem(NSMenuItem(title: "  Last: \(last)", action: nil, keyEquivalent: ""))
+            syncHdr.submenu?.addItem(NSMenuItem(title: "  Last: \(last)", action: nil, keyEquivalent: ""))
         }
-
-        syncHeader.submenu?.addItem(NSMenuItem.separator())
+        syncHdr.submenu?.addItem(NSMenuItem.separator())
         let syncNow = NSMenuItem(title: "Sync Now", action: #selector(syncNow), keyEquivalent: "s")
         syncNow.keyEquivalentModifierMask = [.command]
         syncNow.target = self
-        syncHeader.submenu?.addItem(syncNow)
-        syncHeader.submenu?.addItem(NSMenuItem(title: "Configure Sync...", action: #selector(configureSync), keyEquivalent: ""))
-        syncHeader.submenu?.lastItem?.target = self
-        m.addItem(syncHeader)
+        syncHdr.submenu?.addItem(syncNow)
+        m.addItem(syncHdr)
 
         m.addItem(NSMenuItem.separator())
 
-        // -- Helper daemon controls --
-        let daemonHeader = NSMenuItem(title: "Background Helper", action: nil, keyEquivalent: "")
-        daemonHeader.submenu = NSMenu()
-        daemonHeader.submenu?.addItem(NSMenuItem(title: "Start Helper", action: #selector(startHelper), keyEquivalent: ""))
-        daemonHeader.submenu?.lastItem?.target = self
-        daemonHeader.submenu?.addItem(NSMenuItem(title: "Stop Helper", action: #selector(stopHelper), keyEquivalent: ""))
-        daemonHeader.submenu?.lastItem?.target = self
-        daemonHeader.submenu?.addItem(NSMenuItem.separator())
-        daemonHeader.submenu?.addItem(NSMenuItem(title: "Restart Helper", action: #selector(restartHelper), keyEquivalent: ""))
-        daemonHeader.submenu?.lastItem?.target = self
-        m.addItem(daemonHeader)
+        // Helper controls
+        let daemonHdr = NSMenuItem(title: "Background Helper", action: nil, keyEquivalent: "")
+        daemonHdr.submenu = NSMenu()
+        let startItem = NSMenuItem(title: "Start Helper", action: #selector(startHelper), keyEquivalent: "")
+        startItem.target = self
+        daemonHdr.submenu?.addItem(startItem)
+        let stopItem = NSMenuItem(title: "Stop Helper", action: #selector(stopHelper), keyEquivalent: "")
+        stopItem.target = self
+        daemonHdr.submenu?.addItem(stopItem)
+        daemonHdr.submenu?.addItem(NSMenuItem.separator())
+        let restartItem = NSMenuItem(title: "Restart Helper", action: #selector(restartHelper), keyEquivalent: "")
+        restartItem.target = self
+        daemonHdr.submenu?.addItem(restartItem)
+        m.addItem(daemonHdr)
 
-        // -- Error display --
+        // Error
         if let err = state.error {
             m.addItem(NSMenuItem.separator())
             let errItem = NSMenuItem(title: "⚠️  \(err)", action: nil, keyEquivalent: "")
@@ -204,7 +184,6 @@ final class MenuBarController: NSObject {
 
         m.addItem(NSMenuItem.separator())
 
-        // -- Preferences / Quit --
         let prefs = NSMenuItem(title: "Preferences...", action: #selector(openPreferences), keyEquivalent: ",")
         prefs.target = self
         m.addItem(prefs)
@@ -216,11 +195,13 @@ final class MenuBarController: NSObject {
         return m
     }
 
-    // -------------------------------------------------------------------------
-    // Cluster menu items
-    // -------------------------------------------------------------------------
+    private func authRow(_ provider: String, ok: Bool, identity: String?) -> NSMenuItem {
+        let icon = ok ? "✅" : "❌"
+        let id = identity ?? (ok ? "authenticated" : "not set")
+        return NSMenuItem(title: "  \(icon) \(provider): \(id)", action: nil, keyEquivalent: "")
+    }
 
-    private func clusterMenuItem(_ cluster: ClusterItem, starred: Bool) -> NSMenuItem {
+    private func clusterMenuItem(_ cluster: ClusterItem, starred: Bool, idx: Int?) -> NSMenuItem {
         let icon: String
         switch cluster.provider {
         case "gcp":   icon = "🔵"
@@ -234,32 +215,25 @@ final class MenuBarController: NSObject {
         item.target = self
         item.representedObject = cluster
 
-        // Number shortcuts for first 9 favorites
-        if starred, let idx = state.favorites.firstIndex(where: { $0.id == cluster.id }), idx < 9 {
-            item.keyEquivalent = "\(idx + 1)"
+        if starred, let num = idx {
+            item.keyEquivalent = "\(num + 1)"
             item.keyEquivalentModifierMask = [.command]
         }
 
         return item
     }
 
+    // MARK: - Actions
+
     @objc private func connectToCluster(_ sender: NSMenuItem) {
         guard let cluster = sender.representedObject as? ClusterItem else { return }
-        NSLog("cloum-menu: connect to \(cluster.name)")
 
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/home/sreeram/.bun/bin/bun")
         task.arguments = ["/home/sreeram/cloum/src/index.ts", "connect", cluster.name]
-        task.environment = ProcessInfo.processInfo.environment
-
-        do {
-            try task.run()
-            // Refresh icon on completion
-            task.waitUntilExit()
-            refreshDaemonState()
-        } catch {
-            NSLog("cloum-menu: failed to connect: \(error)")
-        }
+        try? task.run()
+        task.waitUntilExit()
+        refreshDaemonState()
     }
 
     @objc private func discoverClusters() {
@@ -277,7 +251,7 @@ final class MenuBarController: NSObject {
         state.icon = .syncing
         updateIcon()
 
-        DispatchQueue.global(qos: .userInitiated).async {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let task = Process()
             task.executableURL = URL(fileURLWithPath: "/home/sreeram/.bun/bin/bun")
             task.arguments = ["/home/sreeram/cloum/src/index.ts", "sync", "--push"]
@@ -285,22 +259,17 @@ final class MenuBarController: NSObject {
             task.waitUntilExit()
 
             DispatchQueue.main.async {
-                self.refreshDaemonState()
+                self?.refreshDaemonState()
             }
         }
     }
 
-    @objc private func configureSync() {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/home/sreeram/.bun/bin/bun")
-        task.arguments = ["/home/sreeram/cloum/src/index.ts", "config", "--json"]
-        task.environment = ProcessInfo.processInfo.environment
-        try? task.run()
-    }
-
     @objc private func startHelper()  { runHelper(["start"]) }
-    @objc private func stopHelper()   { runHelper(["stop"]) }
-    @objc private func restartHelper(){ runHelper(["stop"]); DispatchQueue.main.asyncAfter(deadline: .now()+1) { self.runHelper(["start"]) } }
+    @objc private func stopHelper()  { runHelper(["stop"]) }
+    @objc private func restartHelper() {
+        runHelper(["stop"])
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.runHelper(["start"]) }
+    }
 
     private func runHelper(_ args: [String]) {
         let task = Process()
@@ -317,129 +286,69 @@ final class MenuBarController: NSObject {
         NSApp.terminate(nil)
     }
 
-    // -------------------------------------------------------------------------
-    // Daemon state refresh via Unix socket
-    // -------------------------------------------------------------------------
+    // MARK: - Daemon State
 
     private func refreshDaemonState() {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            var newState = self.state
-
-            // Try RPC calls over Unix socket
-            if let clusters = self.socketCall("list_clusters", [:]) as? [[String: Any]] {
-                newState.clusters = clusters.map { c in
-                    ClusterItem(
-                        name: c["name"] as? String ?? "",
-                        provider: c["provider"] as? String ?? "",
-                        region: c["region"] as? String ?? "",
-                        isFavorite: c["isFavorite"] as? Bool ?? false
-                    )
-                }
-                newState.favorites = newState.clusters.filter { $0.isFavorite }
-                newState.icon = .connected
-            } else {
-                newState.icon = .disconnected
-                newState.clusters = []
-                newState.favorites = []
-            }
-
-            if let auth = self.socketCall("check_auth", [:]) as? [String: Any] {
-                var a = AuthStatus()
-                if let gcp = auth["gcp"] as? [String: Any] {
-                    a.gcp = gcp["authenticated"] as? Bool ?? false
-                    a.gcpIdentity = gcp["identity"] as? String
-                }
-                if let aws = auth["aws"] as? [String: Any] {
-                    a.aws = aws["authenticated"] as? Bool ?? false
-                    a.awsIdentity = aws["identity"] as? String
-                }
-                if let azure = auth["azure"] as? [String: Any] {
-                    a.azure = azure["authenticated"] as? Bool ?? false
-                    a.azureIdentity = azure["identity"] as? String
-                }
-                newState.auth = a
-            }
-
-            if let sync = self.socketCall("sync_status", [:]) as? [String: Any] {
-                newState.syncEnabled = sync["enabled"] as? Bool ?? false
-                newState.lastSync = sync["lastSync"] as? String
-            }
-
-            newState.error = nil
-
-            DispatchQueue.main.async {
-                self.state = newState
-                self.updateIcon()
-            }
-        }
-    }
-
-    private func socketCall(_ method: String, _ params: [String: Any]) -> Any? {
-        let sockPath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".cloum/helper.sock").path
-
-        guard FileManager.default.fileExists(atPath: sockPath) else { return nil }
-
-        let request: [String: Any] = [
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": method,
-            "params": params
-        ]
-
-        guard let data = try? JSONSerialization.data(withJSONObject: request) else { return nil }
-
-        var result: Any?
-        let conn = CFHostCreateWithName(nil, sockPath as CFString).takeRetainedValue()
-        var addr = sockaddr_un()
-        addr.sun_family = sa_family_t(AF_UNIX)
-
-        // Use a simpler approach: NEPipe + CFStream
-        // For now, fall back to NSTask direct
+        // For now, run cloum commands directly.
+        // A proper Unix-socket implementation would go here.
         let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/nc")
-        task.arguments = ["-U", sockPath]
-        task.standardInput = Pipe()
+        task.executableURL = URL(fileURLWithPath: "/home/sreeram/.bun/bin/bun")
+        task.arguments = ["/home/sreeram/cloum/src/index.ts", "list"]
         task.standardOutput = Pipe()
 
-        let stdin = task.standardInput as? Pipe
-        let stdout = task.standardOutput as? Pipe
+        do {
+            try task.run()
+            task.waitUntilExit()
 
-        if let nc = try? FileHandle(forWritingTo: URL(fileURLWithPath: "/dev/stdin")) {
-            nc.write(data)
-            nc.write(Data([0x0A])) // newline
+            let data = (task.standardOutput as? Pipe)?.fileHandleForReading.readDataToEndOfFile()
+            let output = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+
+            // Simple parse — treat each non-empty line as a cluster name
+            // Format: "  🔵 prod-gke    us-central1  prod"
+            let lines = output.split(separator: "\n").map(String.init)
+            var clusters: [ClusterItem] = []
+            for line in lines where !line.isEmpty && !line.contains("No clusters") {
+                let parts = line.split(separator: " ").compactMap { String($0) }.filter { !$0.isEmpty }
+                if let name = parts.last {
+                    let provider = line.contains("🔵") && !line.contains("Azure") ? "gcp"
+                        : line.contains("🟠") ? "aws"
+                        : line.contains("🔷") ? "azure" : "unknown"
+                    clusters.append(ClusterItem(name: name, provider: provider, region: "unknown", isFavorite: false))
+                }
+            }
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.state.clusters = clusters
+                self.state.favorites = clusters.filter { $0.isFavorite }
+                self.state.icon = clusters.isEmpty ? .disconnected : .connected
+                self.updateIcon()
+            }
+        } catch {
+            DispatchQueue.main.async { [weak self] in
+                self?.state.icon = .error
+                self?.updateIcon()
+            }
         }
-
-        return nil // TODO: implement proper socket call
     }
 
     private func updateIcon() {
-        statusItem.button?.image = state.icon.menuIcon
+        statusItem.button?.image = state.icon.menuImage
     }
 }
 
-// -------------------------------------------------------------------------
-// AppKit integration
-// -------------------------------------------------------------------------
+// MARK: - App Delegate
 
 final class MenuBarDelegate: NSObject, NSApplicationDelegate {
 
     private var controller: MenuBarController!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Ensure we are a menu bar app (not in dock)
         NSApp.setActivationPolicy(.accessory)
-
         controller = MenuBarController()
     }
 
-    func applicationWillTerminate(_ notification: Notification) {
-        // Cleanup if needed
-    }
-
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        return false // menu bar app stays alive
+        return false
     }
 }

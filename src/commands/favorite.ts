@@ -6,8 +6,7 @@
  *   cloum favorites             List all favorites
  */
 
-import { loadClusters, saveClusters } from "../config/loader.ts";
-import { findCluster } from "../config/loader.ts";
+import { loadClusters, saveClusters, findCluster } from "../config/loader.ts";
 import { jsonSuccess, jsonError } from "../utils/output.ts";
 import { green, yellow, cyan, red } from "../utils/colors.ts";
 

@@ -58,10 +58,6 @@ jobs:
             runner: ubuntu-latest
             target: bun-linux-x64
             out: cloum-linux-x64
-          - display: Windows x64
-            runner: windows-latest
-            target: bun-windows-x64
-            out: cloum-windows-x64.exe
 
     steps:
       - uses: actions/checkout@v4

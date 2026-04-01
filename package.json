@@ -42,10 +42,12 @@
     "audit": "bun audit --audit-level=high"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/bun": "latest",
     "@types/node": "^22.0.0",
     "eslint": "^9.0.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.58.0"
   },
   "peerDependencies": {
     "typescript": "^5.5.0"

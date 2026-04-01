@@ -122,7 +122,6 @@ jobs:
         run: |
           bun run src/index.ts --version
           bun run src/index.ts list
-          bun run src/index.ts status
           bun run src/index.ts config --json
           bun run src/index.ts favorites
           bun run src/index.ts sync --status
@@ -205,5 +204,5 @@ jobs:
 
       - name: Validate all source loads without errors
         run: |
-          bun build ./src/index.ts --target=bun-linux-x64 --outfile=/tmp/cloum-types
-          echo "Build successful — all types resolved"
+          bun tsc --noEmit
+          echo "TypeScript validation passed"

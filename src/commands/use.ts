@@ -27,7 +27,7 @@ function canonicalContextName(cluster: ClusterConfig): string | undefined {
  * cluster without re-fetching credentials from the cloud provider.
  * Tries an exact match first, then a substring match on the cloud cluster name.
  */
-export async function useCommand(name: string, namespace?: string): Promise<void> {
+export async function useCommand(name: string, _namespace?: string): Promise<void> {
   const cluster = await findCluster(name);
 
   // List all contexts known to kubectl

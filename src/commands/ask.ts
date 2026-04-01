@@ -16,12 +16,11 @@ import { green, yellow, cyan, red, dim } from "../utils/colors.ts";
 import { jsonSuccess, jsonError } from "../utils/output.ts";
 import { fastPath } from "../utils/intent/fast_path.ts";
 import { llmRoute } from "../utils/intent/llm_router.ts";
-import { buildAskContext, buildSystemPrompt } from "../utils/intent/context.ts";
+import { buildSystemPrompt, buildAskContext } from "../utils/intent/context.ts";
 import { statusGcp } from "../providers/gcp.ts";
 import { statusAws } from "../providers/aws.ts";
 import { statusAzure } from "../providers/azure.ts";
-import { loadClusters, findCluster } from "../config/loader.ts";
-import { VERSION } from "./version.ts";
+import { loadClusters } from "../config/loader.ts";
 import { MINIMAX_API_KEY } from "../consts.ts";
 
 export interface AskOptions {
@@ -428,7 +427,7 @@ async function askCommandHuman(opts: AskOptions): Promise<void> {
 async function askCommandJson(opts: AskOptions, start: number): Promise<void> {
   const { prompt, execute, plan } = opts;
 
-  let result = await resolveFastPath(prompt);
+  const result = await resolveFastPath(prompt);
 
   if (!result || result.confidence < 0.8) {
     if (result) {

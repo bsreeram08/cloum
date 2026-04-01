@@ -10,7 +10,7 @@
  *   cloum config sync          (full sync: pull + merge + push)
  */
 
-import { loadCloudConfig, saveCloudConfig, enableSync, disableSync, syncAll, syncPull, syncPush } from "../config/cloud_sync.ts";
+import { loadCloudConfig, enableSync, disableSync, syncAll, syncPull, syncPush } from "../config/cloud_sync.ts";
 import { jsonSuccess } from "../utils/output.ts";
 import { green, yellow, cyan, red } from "../utils/colors.ts";
 import { GIST_TOKEN } from "../consts.ts";

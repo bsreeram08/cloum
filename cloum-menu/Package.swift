@@ -15,9 +15,7 @@ let package = Package(
     .executableTarget(
       name: "MenuApp",
       dependencies: [],
-      path: "Sources/MenuApp",
-      resources: [.process("Resources")]
+      path: "Sources/MenuApp"
     ),
   ]
 )
-

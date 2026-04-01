@@ -70,7 +70,7 @@ export function saveCloudConfig(config: CloudSyncConfig): void {
     }
     writeFileSync(path, JSON.stringify(config, null, 2) + "\n");
   } catch (err) {
-    throw new Error(`Failed to save cloud config: ${err}`);
+    throw new Error(`Failed to save cloud config: ${err}`, { cause: err });
   }
 }
 
@@ -146,7 +146,7 @@ async function gistFetch(
 
     return { clusters, updatedAt: data.updated_at };
   } catch (err) {
-    throw new Error(`Gist fetch failed: ${err}`);
+    throw new Error(`Gist fetch failed: ${err}`, { cause: err });
   }
 }
 

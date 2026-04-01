@@ -241,7 +241,9 @@ function writePid(pid: number): void {
     import("fs").then(({ writeFileSync }) =>
       writeFileSync(PID_FILE, String(pid))
     );
-  } catch {}
+  } catch (_err) {
+    // best-effort PID write
+  }
 }
 
 async function isRunning(): Promise<boolean> {
@@ -296,7 +298,9 @@ async function stopDaemon(): Promise<void> {
   if (pid) {
     try {
       process.kill(pid, 15); // SIGTERM
-    } catch {}
+    } catch (_err) {
+      // process already gone
+    }
   }
   if (existsSync(SOCKET_PATH)) unlinkSync(SOCKET_PATH);
   if (existsSync(PID_FILE)) unlinkSync(PID_FILE);
