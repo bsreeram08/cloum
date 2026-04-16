@@ -1,1 +1,2 @@
 {"type":"config","name":"tui_implementation","metricName":"tui_score","metricUnit":"","bestDirection":"higher"}
+{"run":1,"commit":"d72c662","metric":0,"metrics":{},"status":"keep","description":"Baseline run - score is 0","timestamp":1776339857184,"segment":0,"confidence":null,"iterationTokens":85,"asi":{"\"hypothesis\"":"Initial baseline run for TUI score"}}

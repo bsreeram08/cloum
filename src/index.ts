@@ -15,6 +15,7 @@ import { renameCommand } from "./commands/rename.ts";
 import { describeCommand } from "./commands/describe.ts";
 import { completionCommand } from "./commands/completion.ts";
 import { useCommand } from "./commands/use.ts";
+import { uiCommand } from "./commands/ui.ts";
 import { VERSION } from "./commands/version.ts";
 import type { Provider } from "./config/types.ts";
 
@@ -330,10 +331,10 @@ function flagStr(
 async function main(): Promise<void> {
   const [, , command, ...rest] = process.argv;
 
-  // Show help when invoked with no arguments
+  // Show UI when invoked with no arguments
   if (!command) {
-    console.log(HELP);
-    process.exit(0);
+    await uiCommand();
+    return;
   }
 
   try {
@@ -597,6 +598,12 @@ async function main(): Promise<void> {
       case "--version":
       case "-v": {
         console.log(`cloum v${VERSION}`);
+        break;
+      }
+
+      case "ui":
+      case "dashboard": {
+        await uiCommand();
         break;
       }
 
