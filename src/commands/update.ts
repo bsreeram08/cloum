@@ -1,5 +1,6 @@
 import { VERSION, REPO } from "./version.ts";
 import { green, yellow, red, cyan } from "../utils/colors.ts";
+import { realpath } from "fs/promises";
 
 interface GitHubRelease {
   tag_name: string;
@@ -54,6 +55,31 @@ async function fetchLatestRelease(): Promise<GitHubRelease | null> {
   }
 }
 
+/**
+ * Resolve the real path of the running cloum binary.
+ * Uses `which` to find cloum in PATH, then resolves any symlinks.
+ */
+async function resolveRunningBinaryPath(): Promise<string> {
+  // Try `which cloum` to find where cloum resolves to in PATH
+  const which = Bun.spawn(["which", "cloum"], { stdout: "pipe", stderr: "pipe" });
+  const out = await new Response(which.stdout).text();
+  const path = out.trim();
+
+  if (path) {
+    // Resolve symlinks to get the actual file
+    try {
+      const realPath = await realpath(path);
+      if (realPath) return realPath;
+    } catch {
+      return path;
+    }
+    return path;
+  }
+
+  // Fallback: common install locations
+  return `${process.env.HOME ?? "/root"}/.local/share/cloum/cloum`;
+}
+
 /** Download and replace the binary */
 async function downloadAndReplace(
   url: string,
@@ -68,22 +94,27 @@ async function downloadAndReplace(
   const arrayBuffer = await blob.arrayBuffer();
 
   // Download to temp file first, then atomically replace
-  const tempDir = process.env.TMPDIR || "/tmp";
+  const tempDir = process.env.TMPDIR ?? "/tmp";
   const tempPath = `${tempDir}/cloum-${Date.now()}`;
-  
+
   await Bun.write(tempPath, new Uint8Array(arrayBuffer));
 
-  // Make executable (Unix only)
+  // Make executable (Unix only), then install, then cleanup — all sequential
   if (process.platform !== "win32") {
-    await Bun.spawn(["chmod", "+x", tempPath]);
+    const chmod = Bun.spawn(["chmod", "+x", tempPath]);
+    await chmod.exited;
   }
 
   // Use install command to atomically replace the binary
-  // This handles the case where we're running from the binary itself
-  await Bun.spawn(["install", tempPath, binaryPath]);
-  
-  // Cleanup temp file
-  await Bun.spawn(["rm", tempPath]);
+  const installProc = Bun.spawn(["install", tempPath, binaryPath]);
+  const installExit = await installProc.exited;
+  if (installExit !== 0) {
+    throw new Error(`install command failed with code ${installExit}`);
+  }
+
+  // Cleanup temp file after install succeeds
+  const rmProc = Bun.spawn(["rm", tempPath]);
+  await rmProc.exited;
 }
 
 /** Run the install script as fallback */
@@ -187,10 +218,10 @@ export async function updateCommand(force: boolean = false): Promise<void> {
   try {
     console.log(yellow(`   Downloading: ${asset.name}`));
     
-    // Get the path where cloum is installed
-    const binDir = `${process.env.HOME || "/root"}/.local/share/cloum`;
-    const binaryPath = `${binDir}/cloum`;
-    
+    // Resolve the actual running binary's path so we replace the right file
+    const binaryPath = await resolveRunningBinaryPath();
+    console.log(yellow(`   Installing to: ${binaryPath}`));
+
     await downloadAndReplace(asset.browser_download_url, binaryPath);
     console.log(green(`\n✅ Updated to v${latestVersion}!`));
     console.log(`   Restart or run \`cloum --version\` to verify.`);

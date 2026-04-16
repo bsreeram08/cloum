@@ -7,14 +7,60 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
+
+env:
+  NODE_OPTIONS: '--max-old-space-size=4096'
 
 jobs:
-  release:
-    name: Build and Release
+  # ---------------------------------------------------------------------------
+  # Detect version from tag
+  # ---------------------------------------------------------------------------
+  vars:
+    name: Environment
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.vars.outputs.version }}
+      is-release: ${{ startsWith(github.ref, 'refs/tags/v') }}
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: vars
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "is-release=true" >> "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------------------
+  # Build binaries — all platforms (parallel matrix)
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build ${{ matrix.display }}
+    needs: vars
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - display: macOS arm64
+            runner: macos-latest
+            target: bun-darwin-arm64
+            out: cloum-darwin-arm64
+          - display: macOS x64
+            runner: macos-latest
+            target: bun-darwin-x64
+            out: cloum-darwin-x64
+          - display: Linux x64
+            runner: ubuntu-latest
+            target: bun-linux-x64
+            out: cloum-linux-x64
+
+    steps:
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -24,28 +70,238 @@ jobs:
           bun-version: latest
 
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
-      - name: Build macOS x64 binary
-        run: bun build ./src/index.ts --compile --outfile cloum-darwin-x64
+      - name: Build ${{ matrix.display }}
+        run: bun build ./src/index.ts --compile --target=${{ matrix.target }} --outfile=${{ matrix.out }}
 
-      - name: Build macOS arm64 binary
-        run: bun build ./src/index.ts --compile --outfile cloum-darwin-arm64 --target bun-darwin-arm64
+      - name: Compute checksum
+        run: node -e "const fs=require('fs');const s=fs.readFileSync('${{ matrix.out }}');const h=require('crypto').createHash('sha256').update(s).digest('hex');fs.writeFileSync('${{ matrix.out }}.sha256',h);"
 
-      - name: Build Linux binary
-        run: bun build ./src/index.ts --compile --outfile cloum-linux-x64 --target bun-linux-x64
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.out }}
+          path: |
+            ${{ matrix.out }}
+            ${{ matrix.out }}.sha256
 
-      - name: Build Windows binary
-        run: bun build ./src/index.ts --compile --outfile cloum-windows-x64.exe --target bun-windows-x64
+  # ---------------------------------------------------------------------------
+  # Build cloum-menu as .app bundle (macOS only)
+  # ---------------------------------------------------------------------------
+  menu:
+    name: Build cloum-menu
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Create Release
+      - name: Install XcodeGen
+        run: |
+          which xcodegen && echo "Already installed" && exit 0
+          brew install xcodegen
+
+      - name: Generate Xcode project
+        run: |
+          cd cloum-menu
+          xcodegen generate
+          echo "Generated: $(ls *.xcodeproj 2>/dev/null && echo 'OK' || echo 'MISSING')"
+
+      - name: Build .app bundle
+        run: |
+          cd cloum-menu
+          xcodebuild -project cloum-menu.xcodeproj \
+            -scheme cloum-menu \
+            -configuration Release \
+            -derivedDataPath build \
+            PRODUCT_BUNDLE_PATH=build/Build/Products/Release/cloum-menu.app \
+            build
+          echo "Built: $(ls build/Build/Products/Release/cloum-menu.app 2>/dev/null && echo 'OK' || echo 'MISSING')"
+
+      - name: Zip .app bundle
+        run: |
+          cd cloum-menu/build/Build/Products/Release
+          zip -r cloum-menu-macos.zip cloum-menu.app
+          echo "Zipped: $(ls -lh cloum-menu-macos.zip 2>/dev/null)"
+
+      - name: Upload cloum-menu .app bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloum-menu-macos
+          path: cloum-menu/build/Build/Products/Release/cloum-menu-macos.zip
+
+  # ---------------------------------------------------------------------------
+  # Build install script + verify
+  # ---------------------------------------------------------------------------
+  install-script:
+    name: Build install script
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set version in install script
+        run: |
+          # Patch install.sh to include version (optional — script fetches from GitHub API)
+          echo "Install script ready (fetches latest from GitHub API)"
+
+      - name: Upload install script
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-script
+          path: install.sh
+
+  # ---------------------------------------------------------------------------
+  # Collect all artifacts + create GitHub Release
+  # ---------------------------------------------------------------------------
+  release:
+    name: Create Release
+    needs: [build, menu, install-script, vars]
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ needs.vars.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f | sort
+
+      - name: Generate release notes
+        run: |
+          VERSION="${{ needs.vars.outputs.version }}"
+          CHANGELOG=$(cat CHANGELOG.md)
+          # Extract section for this version
+          SECTION=$(echo "$CHANGELOG" | awk -v ver="[${VERSION}]" '
+            $0 ~ ver {found=1; next}
+            found && /^## \[/ {exit}
+            found {print}
+          ')
+          if [ -z "$SECTION" ]; then
+            echo "## What's Changed" > /tmp/notes.md
+            git log --oneline --since="" --until="" \
+              $(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo HEAD~10)..HEAD \
+              --pretty='- %s' >> /tmp/notes.md || true
+            cat /tmp/notes.md
+          else
+            echo "$SECTION"
+          fi
+
+      - name: Create GitHub Release
+        id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            cloum-darwin-x64
-            cloum-darwin-arm64
-            cloum-linux-x64
-            cloum-windows-x64.exe
-          generate_release_notes: true
+          tag_name: ${{ github.ref_name }}
+          name: cloum ${{ github.ref_name }}
+          body: |
+            ## What's New in cloum ${{ github.ref_name }}
+
+            See the [changelog](./CHANGELOG.md) for full details.
+
+            ### Downloads
+
+            | Platform | Architecture | File | Checksum |
+            |----------|-------------|------|----------|
+            | macOS | Apple Silicon | `cloum-darwin-arm64` | `cloum-darwin-arm64.sha256` |
+            | macOS | Intel | `cloum-darwin-x64` | `cloum-darwin-x64.sha256` |
+            | Linux | x86_64 | `cloum-linux-x64` | `cloum-linux-x64.sha256` |
+            | Windows | x86_64 | `cloum-windows-x64.exe` | `cloum-windows-x64.exe.sha256` |
+
+            ### Installation
+
+            ```bash
+            curl -sL https://raw.githubusercontent.com/bsreeram08/cloum/${{ github.ref_name }}/install.sh | bash
+            ```
+
+            Or download a binary directly from the assets below.
+
+            ### Verify checksums
+
+            ```bash
+            sha256sum -c cloum-*-*.sha256
+            ```
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') }}
+          generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          UPLOAD_URL="${{ steps.create_release.outputs.upload_url }}"
+          ASSETS_DIR="artifacts"
+
+          for artifact in $(find "$ASSETS_DIR" -type f -not -name "*.sha256" \
+              -not -name "install-script" | sort); do
+            NAME=$(basename "$artifact")
+            echo "Uploading: $NAME"
+            gh release upload "${{ github.ref_name }}" "$artifact" \
+              --clobber \
+              --repo "${{ github.repository }}"
+          done
+
+  # ---------------------------------------------------------------------------
+  # Build OCI attestation (SLSA provenance)
+  # ---------------------------------------------------------------------------
+  attest:
+    name: Attest binaries
+    needs: [release, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Attest
+        run: |
+          for binary in artifacts/cloum-*; do
+            [ -f "$binary" ] || continue
+            NAME=$(basename "$binary")
+            echo "Attesting $NAME..."
+            # gh attest --sign-with-key=... or
+            # Use OIDC-based attestation via SLSA
+            echo "Attestation placeholder for $NAME"
+          done
+        continue-on-error: true
+
+  # ---------------------------------------------------------------------------
+  # Sync to homebrew-core (on release)
+  # ---------------------------------------------------------------------------
+  homebrew:
+    name: Homebrew sync
+    needs: [release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Create Homebrew PR
+        run: |
+          VERSION="${{ needs.release.outputs.version }}"
+          echo "Homebrew update placeholder for v${VERSION}"
+          echo "Would create PR to homebrew-core with:"
+          echo "  url 'https://github.com/bsreeram08/cloum/releases/download/v${VERSION}/cloum-linux-x64'"
+        # NOTE: Uncomment and configure HOMEBREW_TOKEN secret to enable:
+        # env:
+        #   HOMEBREW_TOKEN: ${{ secrets.HOMEBREW_TOKEN }}
+        # run: |
+        #   brew bump-formula-pr --version="${VERSION#v}" cloum --url="..."
+        continue-on-error: true

@@ -6,6 +6,7 @@ interface BaseCluster {
   readonly name: string;
   readonly provider: Provider;
   readonly region: string;
+  readonly isFavorite?: boolean; // starred by user, shown at top
 }
 
 /** GKE cluster configuration */

@@ -9,6 +9,7 @@ export const c = {
   cyan:   "\x1b[0;36m",
   orange: "\x1b[0;33m",
   gray:   "\x1b[0;90m",
+  dim:    "\x1b[2m",
 } as const;
 
 /** Wrap text in a color, resetting after */
@@ -24,3 +25,4 @@ export const cyan   = (t: string) => color(c.cyan, t);
 export const orange = (t: string) => color(c.orange, t);
 export const gray   = (t: string) => color(c.gray, t);
 export const bold   = (t: string) => color(c.bold, t);
+export const dim    = (t: string) => color(c.dim, t);

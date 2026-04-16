@@ -1,5 +1,3 @@
-import { join } from "path";
-import { homedir } from "os";
 import { runCommandSilent } from "../utils/shell.ts";
 
 const SETUP_PROMPT = `You are helping a user set up the Cloum CLI tool on their machine.
