@@ -51,5 +51,8 @@
   },
   "peerDependencies": {
     "typescript": "^5.5.0"
+  },
+  "dependencies": {
+    "@opentui/core": "^0.1.99"
   }
 }
